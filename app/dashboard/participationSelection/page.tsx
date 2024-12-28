@@ -50,11 +50,16 @@ export default function ParticipationSelection() {
   const [isSheetOpen, setIsSheetOpen] = useState(false); // State to control the Sheet visibility
 
   const handleSendEmail = () => {
-    toast.success("Email has been sent successfully!");
+    toast.success("Hey "+ user.name +", Email has been sent successfully!");
     setIsAlertOpen(false); // Close the alert dialog after sending email
+  };
+  const handledownload = () => {
+    toast.success("Hey "+ user.name +", Downloaded Excel Sheet successfully!");
+    setIsSheetOpen(false); // Close the alert dialog after sending email
   };
 
   const handleDownloadExcelClick = () => {
+    
     setIsSheetOpen(true); // Open the sheet when "Download Excel" is clicked
   };
 
@@ -131,7 +136,7 @@ export default function ParticipationSelection() {
                     Download the data of student participants registered for TEDxSIST Feb 2025.<br/>
                   </SheetDescription>
                 </SheetHeader>
-                <Button className="mt-4">Download Excel</Button>
+                <Button onClick={handledownload} className="mt-4">Download Excel</Button>
               </SheetContent>
             </Sheet>
           </div>
