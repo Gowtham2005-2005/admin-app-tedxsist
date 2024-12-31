@@ -13,9 +13,9 @@ export function TeamSwitcher() {
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <SidebarMenuButton className="flex items-center gap-2">
+        <SidebarMenuButton className="flex items-center gap-2 ">
           {/* Logo */}
-          <div className="flex aspect-square items-center justify-center rounded-lg bg-sidebar-white text-sidebar-primary-foreground">
+          <div className="flex aspect-square items-center justify-center rounded-lg bg-sidebar-white text-sidebar-primary-foreground ">
             <Image
               src="/favicon.ico" // Path to logo image in the public directory
               alt="TEDxSIST Logo"
@@ -24,7 +24,7 @@ export function TeamSwitcher() {
             />
           </div>
           {/* Text */}
-          <div className="grid flex-1 text-left text-sm leading-tight">
+          <div className="grid flex-1 text-left text-sm leading-tight ">
             <span className="truncate font-semibold">TEDxSIST</span>
             <span className="truncate text-xs">Central App</span>
           </div>

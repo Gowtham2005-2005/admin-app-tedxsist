@@ -1,5 +1,5 @@
 'use client';
-
+import { Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
@@ -26,7 +26,6 @@ export function LoginForm({
       const response = await signInWithPopup(auth, googleProvider);
       const user = response.user;
       const token = await user.getIdToken(); // Fetch the ID token
-
       // Optionally verify email domain
       const email = user.email || "";
       if (!email.endsWith("@gmail.com")) {
@@ -73,7 +72,10 @@ export function LoginForm({
           aria-label="Login with Google"
         >
           {loading ? (
+            <>
+            <Loader2 className="animate-spin mr-2" />
             <span>Signing in...</span>
+            </>
           ) : (
             <>
               <svg

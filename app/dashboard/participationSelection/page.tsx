@@ -1,7 +1,10 @@
 'use client'
+import React, { useState, useEffect } from "react";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/firebase"; // Import your Firebase instance
 import { useRouter } from "next/navigation";
 import { jwtDecode } from "jwt-decode";
-import React, { useState } from "react";
+
 import { DataTableDemo } from "@/components/datatable";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +36,23 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
+export interface Participant {
+  id: string;
+  name: string;
+  degree: string;
+  department: string;
+  experienceResponse: string;
+  resilienceResponse: string;
+  goalsResponse: string;
+  email: string;
+  selected: boolean;
+}
+
 export default function ParticipationSelection() {
+
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const [isSheetOpen, setIsSheetOpen] = useState(false); // State to control the Sheet visibility
   const router = useRouter();
   const token = sessionStorage.getItem('Token');
   let user = null;
@@ -46,22 +65,71 @@ export default function ParticipationSelection() {
     }
   }
 
-  const [isAlertOpen, setIsAlertOpen] = useState(false);
-  const [isSheetOpen, setIsSheetOpen] = useState(false); // State to control the Sheet visibility
+  useEffect(() => {
+    const fetchParticipants = async () => {
+      const participantsCollection = collection(db, "participants");
+      const participantSnapshot = await getDocs(participantsCollection);
+      const participantList = participantSnapshot.docs.map((doc) => ({
+        ...doc.data(),
+        id: doc.id,
+        selected: doc.data().selected || false, // Ensure "selected" field is fetched and initialized
+      })) as Participant[];
+      setParticipants(participantList);
+    };
+    fetchParticipants();
+  }, []);
 
   const handleSendEmail = () => {
-    toast.success("Hey "+ user.name +", Email has been sent successfully!");
+    toast.success(`Hey ${user.name}, Email has been sent successfully!`);
     setIsAlertOpen(false); // Close the alert dialog after sending email
-  };
-  const handledownload = () => {
-    toast.success("Hey "+ user.name +", Downloaded Excel Sheet successfully!");
-    setIsSheetOpen(false); // Close the alert dialog after sending email
   };
 
   const handleDownloadExcelClick = () => {
-    
     setIsSheetOpen(true); // Open the sheet when "Download Excel" is clicked
   };
+
+const handledownload = async () => {
+  try {
+    const response = await fetch('/api/generateExcel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(participants), // Send participants data
+    });
+
+    if (response.ok) {
+      const { filePath } = await response.json();
+
+      // Construct the full URL
+      const fileUrl = `${window.location.origin}${filePath}`;
+
+      // Trigger file download
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      link.download = 'Participants.xlsx';
+      link.click();
+
+      toast.success('Excel file downloaded successfully!');
+    } else {
+      toast.error('Failed to generate Excel file.');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    toast.error('Something went wrong.');
+  }
+  setIsSheetOpen(false); // Close the sheet
+};
+
+  const handleSelectionChange = (updatedParticipant: Participant) => {
+    // Update the participant in the state (or Firebase)
+    setParticipants(prevParticipants =>
+      prevParticipants.map(p =>
+        p.id === updatedParticipant.id ? updatedParticipant : p
+      )
+    );
+  };
+
+
+  
 
   return (
     <>
@@ -80,7 +148,6 @@ export default function ParticipationSelection() {
               <DropdownMenuContent>
                 <DropdownMenuLabel>Options</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                
                 <DropdownMenuItem onClick={() => setIsAlertOpen(true)}>
                   Send Rejected Email
                 </DropdownMenuItem>
@@ -111,12 +178,12 @@ export default function ParticipationSelection() {
 
             {/* Alert Dialog for sending email */}
             <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-              <AlertDialogTrigger asChild></AlertDialogTrigger>
+              <AlertDialogTrigger asChild />
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This action cannot be undone. This will send emails to all Rejected participants. Please review before proceeding. Basically those without marked on checkbox.
+                    This action cannot be undone. This will send emails to all rejected participants (those without the checkbox marked).
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -142,36 +209,36 @@ export default function ParticipationSelection() {
           </div>
         </div>
         <div className="-mx-4 flex-1 overflow-auto px-4 py-1 lg:flex-row lg:space-x-12 lg:space-y-0">
-          <DataTableDemo />
+          <DataTableDemo participants={participants} onSelectionChange={handleSelectionChange} />
         </div>
       </section>
 
       {/* Section for mobile screens */}
       <section className="lg:hidden text-foreground">
         <div className="mb-4">
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mb-16 items-center justify-center text-center">
-      <span className="bg-gradient-to-b from-foreground to-transparent bg-clip-text text-[10rem] font-extrabold leading-none text-transparent">
-        403
-      </span>
-      <h2 className="my-2 font-heading text-2xl font-bold">
-        Hey {user.name}
-      </h2>
-      <p>
-       Probably you are using a mobile view. Please Switch to desktop for this page.
-      </p>
-      <div className="mt-8 flex justify-center gap-2">
-        <Button onClick={() => router.push("/dashboard/qrTicketing")} variant="default" size="lg">
-          Go back
-        </Button>
-        <Button
-          onClick={() => router.push("/dashboard/qrTicketing")}
-          variant="ghost"
-          size="lg"
-        >
-          Back to Home
-        </Button>
-      </div>
-    </div>
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mb-16 items-center justify-center text-center">
+            <span className="bg-gradient-to-b from-foreground to-transparent bg-clip-text text-[10rem] font-extrabold leading-none text-transparent">
+              403
+            </span>
+            <h2 className="my-2 font-heading text-2xl font-bold">
+              Hey {user.name}
+            </h2>
+            <p>
+              Probably you are using a mobile view. Please switch to desktop for this page.
+            </p>
+            <div className="mt-8 flex justify-center gap-2">
+              <Button onClick={() => router.push("/dashboard/qrTicketing")} variant="default" size="lg">
+                Go back
+              </Button>
+              <Button
+                onClick={() => router.push("/dashboard/qrTicketing")}
+                variant="ghost"
+                size="lg"
+              >
+                Back to Home
+              </Button>
+            </div>
+          </div>
         </div>
       </section>
     </>
