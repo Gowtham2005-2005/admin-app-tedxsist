@@ -12,6 +12,15 @@ import {
   getFilteredRowModel,
   ColumnFiltersState
 } from "@tanstack/react-table";
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+} from "@/components/ui/alert-dialog";
 import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 import {
   HoverCard,
@@ -70,41 +79,78 @@ export const DataTableDemo = ({ participants: initialParticipants, onSelectionCh
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
-  
+  const [currentParticipant, setCurrentParticipant] = useState<Participant | null>(null);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+
+  const handleCheckboxChange = (participant: Participant, newValue: boolean) => {
+  setCurrentParticipant({ ...participant, selected: newValue });
+  setConfirmDialogOpen(true);
+};
+
+const confirmSelectionUpdate = async () => {
+  if (currentParticipant) {
+    // Update Firestore
+    await updateParticipantSelection(currentParticipant);
+
+    // Notify parent to update local state
+    onSelectionChange(currentParticipant);
+
+    // Close dialog
+    setConfirmDialogOpen(false);
+    setCurrentParticipant(null);
+  }
+};
+
   const columns: ColumnDef<Participant>[] = [
     {
-      id: "select",
-      header: ({ table }) => (
-        <Checkbox
-          checked={
-            table.getIsAllPageRowsSelected() ||
-            (table.getIsSomePageRowsSelected() && "indeterminate")
-          }
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
-        />
-      ),
-      cell: ({ row }) => {
-        const participant = row.original;
+    id: "select",
+    header: ({ table }) => (
+      <Checkbox
+        checked={
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && "indeterminate")
+        }
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Select all"
+      />
+    ),
+    cell: ({ row }) => {
+      const participant = row.original;
 
-        return (
+      return (
+        <>
           <Checkbox
             checked={participant.selected}
-            onCheckedChange={async (value) => {
-              const newValue = !!value;
-              const updatedParticipant = { ...participant, selected: newValue };
-
-              // Update Firestore
-              await updateParticipantSelection(updatedParticipant);
-
-              // Notify parent to update local state
-              onSelectionChange(updatedParticipant);
-            }}
+            onCheckedChange={(value) => handleCheckboxChange(participant, !!value)}
             aria-label="Select row"
           />
-        );
-      },
+
+          {/* AlertDialog for confirmation */}
+          {currentParticipant?.id === participant.id && (
+            <AlertDialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>{currentParticipant.selected ? "Confirm Selection" : "Ditch This Person"}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to mark this participant as{" "}
+                    {currentParticipant.selected ? "selected" : "not selected"}?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <Button variant="outline" onClick={() => setConfirmDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={confirmSelectionUpdate}>
+                    Confirm
+                  </Button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+        </>
+      );
     },
+  },
     {
       accessorKey: "name",
       header: ({ column }) => (

@@ -122,7 +122,7 @@ export default function CertificateGeneration() {
       <Popover>
         <PopoverTrigger asChild>
           
-          <Button variant="outline">Open popover</Button>
+          <Button variant="outline">Dimensions</Button>
         </PopoverTrigger>
         <PopoverContent className="w-80">
           <div className="grid gap-4">
