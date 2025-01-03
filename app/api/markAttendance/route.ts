@@ -9,8 +9,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Debugging: Log qrResult to check if it's correct
-    console.log('QR result received:', qrResult);
+
 
     const participantRef = doc(db, 'participants', qrResult);
     const participantDoc = await getDoc(participantRef);
@@ -29,10 +28,11 @@ export async function GET(request: NextRequest) {
 // API endpoint to mark attendance
 export async function POST(request: NextRequest) {
   try {
-    const { qrResult, qrResultTimestamp } = await request.json();
+    const { qrResult, qrResultTimestamp,userName } = await request.json();
 
-    // Debugging: Log qrResult and timestamp for POST request
-    console.log('Attendance data:', qrResult, qrResultTimestamp);
+    if (!qrResult || !qrResultTimestamp || !userName) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
 
     const participantRef = doc(db, 'participants', qrResult);
     const participantDoc = await getDoc(participantRef);
@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
     await updateDoc(participantRef, {
       attend: true,
       timestamp: qrResultTimestamp,
+      markedBy: userName,
     });
 
     const updatedParticipant = {

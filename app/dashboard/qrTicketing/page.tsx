@@ -55,13 +55,17 @@ const ParentComponent = () => {
 
   // Function to mark attendance
   const handleMarkAttendance = async () => {
+  if (!user) {
+    console.error("User information is not available.");
+    return;
+  }
   try {
     const response = await fetch('/api/markAttendance', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ qrResult, qrResultTimestamp }),
+      body: JSON.stringify({ qrResult, qrResultTimestamp, userName: user.name }),
     });
 
     if (response.ok) {

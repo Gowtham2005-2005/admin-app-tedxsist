@@ -34,7 +34,7 @@ export function LoginForm({
       }
 
       sessionStorage.setItem('Token', token);
-      router.push('/dashboard/participationSelection');
+      router.push('/dashboard');
     } catch (error) {
       console.error("Error during Google Sign-In:", error);
       setError("Sign-in failed. Please try again.");
@@ -46,7 +46,7 @@ export function LoginForm({
   useEffect(() => {
     const token = sessionStorage.getItem('Token');
     if (token) {
-      router.push('/dashboard/participationSelection');
+      router.push('/dashboard');
     }
   }, [router])
 
