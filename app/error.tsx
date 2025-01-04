@@ -10,14 +10,13 @@ export default function NotFound() {
   return (
     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 mb-16 items-center justify-center text-center">
       <span className="bg-gradient-to-b from-foreground to-transparent bg-clip-text text-[10rem] font-extrabold leading-none text-transparent">
-        404
+        OOPS
       </span>
       <h2 className="my-2 font-heading text-2xl font-bold">
-        Something&apos;s missing
+        Something&apos;s went wrong
       </h2>
       <p>
-        Sorry, the page you are looking for doesn&apos;t exist or has been
-        moved. If you believe this page exists and there is an error, kindly report it to tech team.
+        Sorry, It&apos;s on us. Please contact tech team.
       </p>
       <div className="mt-8 flex justify-center gap-2">
         <Button onClick={() => router.back()} variant="default" size="lg">
