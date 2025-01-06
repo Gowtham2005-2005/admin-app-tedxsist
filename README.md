@@ -43,12 +43,12 @@ Replace the placeholders (`<your-firebase-...>`) with your actual Firebase proje
 
 ### 1. Front-End for Participants
 
-- Build a user-friendly interface for participants to view and manage their details.
+- for participants.
 
 ### 2. Bulk Email and Certificate Management
 
-- Implement a feature to send bulk emails to participants.
-- Save certificates in the target Google Drive for efficient storage and sharing.
+- send bulk emails to participants.
+- Save certificates in the target Google Drive
 
 ### 3. Scalability
 
