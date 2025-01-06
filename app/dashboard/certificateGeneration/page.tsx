@@ -42,10 +42,10 @@ import {
 } from "@/components/ui/popover"
 export default function CertificateGeneration() {
   const [dimensions, setDimensions] = useState({
-    font_size: '200px',
+    font_size: '200',
     color: '#000000', 
-    textX: '25px',
-    textY: '25px',
+    textX: '25',
+    textY: '25',
   });
 
   // Load dimensions from localStorage on mount

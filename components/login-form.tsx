@@ -26,7 +26,7 @@ export function LoginForm({
       const response = await signInWithPopup(auth, googleProvider);
       const user = response.user;
       const token = await user.getIdToken(); // Fetch the ID token
-      // Optionally verify email domain
+      // Optionally verify email domain(example@tedxsist.com)
       const email = user.email || "";
       if (!email.endsWith("@gmail.com")) {
         setError("Please use your TEDxSIST email to sign in.");

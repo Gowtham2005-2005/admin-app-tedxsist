@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TEDxSIST Central-Admin-App
 
 ## Getting Started
 
-First, run the development server:
+To set up and run the development server, follow these steps:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+1. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+2. Start the development server:
+
+   ```bash
+   npm run dev
+   ```
+
+3. Open [http://localhost:3000](http://localhost:3000) in your browser to view the app.  
+   Alternatively, you can use your IP address (IPv4) to test on other devices.
+
+---
+
+## Connect with Firebase
+
+Set up your Firebase environment by creating a `.env.local` file in the root directory and adding the following configuration:
+
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=<your-firebase-api-key>
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=<your-firebase-auth-domain>
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=<your-firebase-project-id>
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=<your-firebase-storage-bucket>
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=<your-firebase-messaging-sender-id>
+NEXT_PUBLIC_FIREBASE_APP_ID=<your-firebase-app-id>
+NEXT_PUBLIC_TEMP_DIR=./public/TEMP
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Replace the placeholders (`<your-firebase-...>`) with your actual Firebase project configuration values.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## To-Do List
 
-## Learn More
+### 1. Front-End for Participants
 
-To learn more about Next.js, take a look at the following resources:
+- Build a user-friendly interface for participants to view and manage their details.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. Bulk Email and Certificate Management
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Implement a feature to send bulk emails to participants.
+- Save certificates in the target Google Drive for efficient storage and sharing.
 
-## Deploy on Vercel
+### 3. Scalability
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Optimize the app to reduce unnecessary reads and writes to the Firebase database.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 4. Security Enhancements
+
+- Use **HTTP-only cookies** for session management instead of saving tokens in local or session storage, if necessary.
+
+### 5. Firebase Security Rules
+
+Update the Firestore security rules to ensure data protection. Use the following rules to restrict access:
+
+```json
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Match all documents in the database
+    match /{document=**} {
+      // Allow read access only for authenticated users
+      allow read: if request.auth != null;
+
+      // Allow write access only if the user is an admin
+      allow write: if request.auth != null && request.auth.token.admin == true;
+    }
+  }
+}
+```
+
+**Note:** These security rules are not currently implemented and will be added in future updates.
+
+---
+
+© TEDxSIST @tech_team
