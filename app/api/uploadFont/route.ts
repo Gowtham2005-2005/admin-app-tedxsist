@@ -1,4 +1,4 @@
-import fs from 'fs';
+import { promises as fs } from 'fs';
 import path from 'path';
 import { NextResponse } from 'next/server';
 
@@ -10,34 +10,44 @@ export async function POST(request: Request) {
     const file = formData.get('file');
 
     if (!file || !(file instanceof Blob)) {
-      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+      return NextResponse.json({ error: 'No valid file uploaded' }, { status: 400 });
     }
 
-    // Manually check file extension
-    const filename = file.name;
+    // Check file name and extension
+    const filename = (file as any).name || 'uploaded-font';
     const fileExtension = path.extname(filename).toLowerCase();
-
     const allowedExtensions = ['.ttf', '.otf'];
+
     if (!allowedExtensions.includes(fileExtension)) {
-      return NextResponse.json({ error: 'Please upload a valid font file (.ttf or .otf)' }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid file type. Please upload a .ttf or .otf font file.' }, { status: 400 });
     }
 
-    // Define the destination path for saving the file
+    // Define paths
     const destinationPath = path.join(process.cwd(), 'public/google-fonts', `font${fileExtension}`);
+    const tempPath = path.join(process.cwd(), 'public/google-fonts', `temp-font${fileExtension}`);
 
     // Ensure the target directory exists
     const dirPath = path.dirname(destinationPath);
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
+    await fs.mkdir(dirPath, { recursive: true });
+
+    // Write the uploaded file to the temp path
+    const buffer = Buffer.from(await file.arrayBuffer());
+    await fs.writeFile(tempPath, buffer);
+
+    // Delete the existing font file if it exists
+    if (await fs.stat(destinationPath).catch(() => false)) {
+      await fs.unlink(destinationPath);
     }
 
-    // Convert the Blob to a Buffer and write to file system
-    const buffer = Buffer.from(await file.arrayBuffer());
-    fs.writeFileSync(destinationPath, buffer);
+    // Copy the temp file to the destination
+    await fs.copyFile(tempPath, destinationPath);
 
-    return NextResponse.json({ message: 'Font uploaded and saved successfully!' });
+    // Delete the temporary file
+    await fs.unlink(tempPath);
+
+    return NextResponse.json({ message: 'Font uploaded and saved successfully!', path: destinationPath });
   } catch (error) {
     console.error('Error handling file upload:', error);
-    return NextResponse.json({ error: 'Failed to upload the font file' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to upload the font file. Please try again.' }, { status: 500 });
   }
 }

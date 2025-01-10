@@ -41,24 +41,20 @@ Replace the placeholders (`<your-firebase-...>`) with your actual Firebase proje
 
 ## To-Do List
 
-### 1. Front-End for Participants
-
-- for participants.
-
-### 2. Bulk Email and Certificate Management
+### 1. Bulk Email and Certificate Management
 
 - send bulk emails to participants.
 - Save certificates in the target Google Drive
 
-### 3. Scalability
+### 2. Scalability
 
 - Optimize the app to reduce unnecessary reads and writes to the Firebase database.
 
-### 4. Security Enhancements
+### 3. Security Enhancements
 
 - Use **HTTP-only cookies** for session management instead of saving tokens in local or session storage, if necessary.
 
-### 5. Firebase Security Rules
+### 4. Firebase Security Rules
 
 Update the Firestore security rules to ensure data protection. Use the following rules to restrict access:
 

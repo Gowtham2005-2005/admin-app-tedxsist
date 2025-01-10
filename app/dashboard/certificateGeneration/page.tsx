@@ -47,6 +47,7 @@ export default function CertificateGeneration() {
     textX: '25',
     textY: '25',
   });
+  const [loading, setLoading] = useState(false);
 
   // Load dimensions from localStorage on mount
   useEffect(() => {
@@ -166,22 +167,22 @@ const handleSaveClick = async () => {
   };
 
   const handleCreateSampleClick = async () => {
-  if (!dimensions ) {
+  if (!dimensions) {
     toast.error('Missing dimensions');
     return;
   }
 
   const sampleData = {
-  fontSize: dimensions.font_size,
-  color: dimensions.color,
-  textX: dimensions.textX,
-  textY: dimensions.textY,
-  name: "Sample Name"
-};
-
+    fontSize: dimensions.font_size,
+    color: dimensions.color,
+    textX: dimensions.textX,
+    textY: dimensions.textY,
+    name: "Sample Name"
+  };
+  
   try {
     // Call API to generate the sample certificate
-    const response = await fetch('/api/generateSample', {
+    const response = await fetch('http://localhost:5000/api/generateSample', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -190,19 +191,55 @@ const handleSaveClick = async () => {
     });
 
     if (response.ok) {
-    toast.success(`Hey ${user?.name}, Sample Generated!`);
+      toast.success(`Hey ${user?.name}, Sample Generated!`);
     } else {
-      toast.error('Failed to generate sample');
+      const errorData = await response.json();
+toast.error('Failed to generate sample: ' + (errorData.message || 'Unknown error occurred'));
     }
   } catch (err) {
     console.error('Error generating sample:', err);
     toast.error('Error generating sample. Please try again');
   }
+};
 
-  };
 
-  const handleCreateClick = () => {
-    toast.success(`Hey ${user?.name}, Generated Certificates Successfully!`);
+  const handleCreateClick = async () => {
+  if (!dimensions ) {
+    toast.error('Missing dimensions');
+    return;
+  }
+
+  const formData = {
+  fontSize: dimensions.font_size,
+  color: dimensions.color,
+  textX: dimensions.textX,
+  textY: dimensions.textY
+};
+setLoading(true);
+  try {
+  
+    const response = await fetch('/api/generateCertificates', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(formData),
+    });
+    const data = await response.json();
+    if (response.ok) {
+    toast.success(`Hey ${user?.name}, Certificates Generated!`);
+    } else {
+      toast.error(data.message || 'Failed to generate Certificate');
+    }
+  } catch (err) {
+    console.error('Error generating Certificate:', err);
+    toast.error('Error generating Certificate. Please try again');
+  }
+  finally {
+    // Set loading to false once the process is complete
+    setLoading(false);
+  }
+
   };
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -341,14 +378,19 @@ const handleSaveClick = async () => {
               <DrawerDescription className="flex justify-center">Check Whether the Alignment for the generated Certificate is proper</DrawerDescription>
             </DrawerHeader>
             <div className="flex justify-center my-4">
-              <Image 
-            src={`/_TEMP/sample.png?v=${new Date().getTime()}`}
-            alt="Sample Certificate" 
-            width={600}
-            height={400}
-            className="max-w-full h-auto"
-            priority
-          />
+              <div className="relative w-full h-[400px]"> {/* Adjust `h-[400px]` as needed */}
+  <Image
+    src={`/_TEMP/sample.png?v=${new Date().getTime()}`}
+    alt="Sample Certificate"
+    className="object-contain"
+    quality={100}
+    fill
+    priority
+  />
+</div>
+
+
+
             </div>
             <DrawerFooter>
               <div className="flex justify-center">
@@ -362,8 +404,18 @@ const handleSaveClick = async () => {
       </div>
 
       <Button className="flex-1" onClick={handleCreateClick}>
-        Generate Certificates
-      </Button>
+  {/* Conditionally render text or loading spinner */}
+  {loading ? (
+    <div className="flex justify-center items-center">
+      <span className="text-md">Uploading Certificates...</span>
+      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-white-500 ml-2"></div>
+    </div>
+  ) : (
+    "Generate Certificates"
+  )}
+</Button>
+
+      
     </div>
   </CardContent>
  

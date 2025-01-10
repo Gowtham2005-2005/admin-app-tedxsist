@@ -1,7 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from 'firebase/auth';
-import { getFirestore, collection, getDocs, onSnapshot,getDoc} from "firebase/firestore";
+import { getFirestore, collection, getDocs, onSnapshot,getDoc,where,query} from "firebase/firestore";
 import { updateDoc, doc } from 'firebase/firestore';
 
 // TODO: Add SDKs for Firebase products that you want to use
@@ -23,4 +23,4 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export {collection, getDocs,onSnapshot,updateDoc, doc ,getDoc};
+export {collection, getDocs,onSnapshot,updateDoc, doc ,getDoc,where,query};
