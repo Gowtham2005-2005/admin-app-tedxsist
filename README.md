@@ -78,6 +78,6 @@ service cloud.firestore {
 
 ---
 
-**Note:** I have added flask based restapi, because javascript ain't generating certs properly
+**Note:** I have added flask based restapi, because javascript ain't generating certs properly.. (cert_gen) 
 
 © TEDxSIST @tech_team
