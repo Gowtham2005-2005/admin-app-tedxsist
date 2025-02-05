@@ -21,6 +21,14 @@ To set up and run the development server, follow these steps:
 
 ---
 
+**Important Security Note:** 
+The Flask-based REST API (cert_gen) requires proper security measures:
+- Implement authentication to prevent unauthorized access
+- Add rate limiting to prevent abuse
+- Use HTTPS in production
+- Consider adding API keys or tokens
+- Validate all inputs to prevent injection attacks
+
 ## Connect with Firebase
 
 Set up your Firebase environment by creating a `.env.local` file in the root directory and adding the following configuration:

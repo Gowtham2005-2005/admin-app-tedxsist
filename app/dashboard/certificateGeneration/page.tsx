@@ -218,7 +218,7 @@ toast.error('Failed to generate sample: ' + (errorData.message || 'Unknown error
 setLoading(true);
   try {
   
-    const response = await fetch('/api/generateCertificates', {
+    const response = await fetch('http://localhost:5000/api/generateCertificates', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -1,12 +1,55 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import { NextResponse } from 'next/server';
+import { v2 as cloudinary } from 'cloudinary';
+
+interface CloudinaryResponse {
+  secure_url: string;
+  public_id: string;
+}
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+async function clearFontFolder() {
+  try {
+    console.log('Checking for existing fonts...');
+    const searchResult = await cloudinary.search
+      .expression('folder:tedx-certificates/fonts/*')
+      .max_results(100)  // Increase if you expect more files
+      .execute();
+    
+    if (searchResult.total_count > 0) {
+      console.log(`Found ${searchResult.total_count} existing fonts. Clearing folder...`);
+      
+      // Delete each resource one by one
+      for (const resource of searchResult.resources) {
+        try {
+          console.log(`Deleting font: ${resource.public_id}`);
+          await cloudinary.uploader.destroy(resource.public_id, { 
+            resource_type: 'raw',
+            invalidate: true 
+          });
+        } catch (deleteError) {
+          console.error(`Failed to delete ${resource.public_id}:`, deleteError);
+        }
+      }
+      
+      console.log('Successfully emptied fonts folder');
+    } else {
+      console.log('No existing fonts found');
+    }
+  } catch (error) {
+    console.error('Error while clearing fonts folder:', error);
+    throw new Error('Failed to clear fonts folder');
+  }
+}
 
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-
-    // Get the uploaded file
     const file = formData.get('file');
 
     if (!file || !(file instanceof Blob)) {
@@ -15,39 +58,45 @@ export async function POST(request: Request) {
 
     // Check file name and extension
     const filename = (file as any).name || 'uploaded-font';
-    const fileExtension = path.extname(filename).toLowerCase();
-    const allowedExtensions = ['.ttf', '.otf'];
-
-    if (!allowedExtensions.includes(fileExtension)) {
+    const fileExtension = filename.split('.').pop()?.toLowerCase();
+    
+    if (!['ttf', 'otf'].includes(fileExtension || '')) {
       return NextResponse.json({ error: 'Invalid file type. Please upload a .ttf or .otf font file.' }, { status: 400 });
     }
 
-    // Define paths
-    const destinationPath = path.join(process.cwd(), 'public/google-fonts', `font${fileExtension}`);
-    const tempPath = path.join(process.cwd(), 'public/google-fonts', `temp-font${fileExtension}`);
+    // Clear the fonts folder before uploading
+    await clearFontFolder();
 
-    // Ensure the target directory exists
-    const dirPath = path.dirname(destinationPath);
-    await fs.mkdir(dirPath, { recursive: true });
-
-    // Write the uploaded file to the temp path
+    // Convert file to base64
     const buffer = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(tempPath, buffer);
+    const base64File = buffer.toString('base64');
+    const dataURI = `data:application/x-font-${fileExtension};base64,${base64File}`;
 
-    // Delete the existing font file if it exists
-    if (await fs.stat(destinationPath).catch(() => false)) {
-      await fs.unlink(destinationPath);
-    }
+    console.log('Uploading new font to Cloudinary...');
+    // Upload to Cloudinary
+    const uploadResponse = await cloudinary.uploader.upload(dataURI, {
+      resource_type: 'raw',
+      folder: 'tedx-certificates/fonts',
+      public_id: 'font',  // Will save as font.ttf or font.otf
+      format: fileExtension,
+      overwrite: true,
+      invalidate: true
+    });
 
-    // Copy the temp file to the destination
-    await fs.copyFile(tempPath, destinationPath);
+    console.log('Font uploaded successfully. URL:', uploadResponse.secure_url);
 
-    // Delete the temporary file
-    await fs.unlink(tempPath);
+    return NextResponse.json({ 
+      message: 'Font uploaded successfully!',
+      url: uploadResponse.secure_url,
+      public_id: uploadResponse.public_id,
+      format: fileExtension
+    });
 
-    return NextResponse.json({ message: 'Font uploaded and saved successfully!', path: destinationPath });
   } catch (error) {
-    console.error('Error handling file upload:', error);
-    return NextResponse.json({ error: 'Failed to upload the font file. Please try again.' }, { status: 500 });
+    console.error('Error handling font upload:', error);
+    return NextResponse.json({ 
+      error: 'Failed to upload the font file. Please try again.',
+      details: error instanceof Error ? error.message : String(error)
+    }, { status: 500 });
   }
 }

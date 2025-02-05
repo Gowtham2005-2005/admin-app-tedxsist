@@ -1,63 +1,72 @@
 import { NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
-import fs from 'fs';
-import path from 'path';
+import { v2 as cloudinary } from 'cloudinary';
 
-// Directory for temporary storage, relative to the project's root
-const tempDir = path.join(process.cwd(), 'public', '_TEMP');
-
-// Ensure the _TEMP directory exists
-fs.mkdirSync(tempDir, { recursive: true });
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 // Helper function to generate Excel file
-async function generateExcelFile(data: any, filename: string): Promise<string> {
-  const ws = XLSX.utils.json_to_sheet(data);
+function generateExcel(data: any): Buffer {
+  // Create workbook
   const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(data);
   XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-  const filePath = path.join(tempDir, filename);
+  
+  // Write to buffer
+  return XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
+}
 
+// Function to clear Cloudinary excel file
+async function clearExistingExcelFile() {
   try {
-    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' });
-    fs.writeFileSync(filePath, excelBuffer); // Save buffer to the file system
+    await cloudinary.uploader.destroy(
+      'tedx-certificates/excel/excel',
+      { resource_type: 'raw' }
+    );
+    console.log('Cleared existing excel file');
   } catch (error) {
-    console.error('Error saving the file:', error);
-    throw error;
+    console.log('No existing excel file found or error clearing:', error);
   }
-
-  return filePath;
 }
 
-// Helper function to delete the file after a timeout
-function deleteFileAfterTimeout(filePath: string, timeout: number) {
-  setTimeout(() => {
-    fs.unlink(filePath, (err) => {
-      if (err) {
-        console.error(`Error deleting file: ${filePath}`, err);
-      } else {
-        console.log(`File deleted: ${filePath}`);
-      }
-    });
-  }, timeout);
-}
-
-// POST API handler to generate the Excel file
+// POST handler to generate and upload Excel file
 export async function POST(req: Request) {
   try {
     const data = await req.json();
-    const filename = `Participation_${Date.now()}.xlsx`;
+    
+    // Generate Excel buffer
+    const excelBuffer = generateExcel(data);
+    
+    // Convert to base64
+    const base64 = excelBuffer.toString('base64');
+    const dataURI = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64}`;
 
-    // Generate the Excel file
-    const filePath = await generateExcelFile(data, filename);
+    // Upload to Cloudinary
+    const uploadResult = await cloudinary.uploader.upload(dataURI, {
+      folder: 'tedx-certificates/excel',
+      public_id: 'participants',
+      resource_type: 'raw',
+      format: 'xlsx',
+      overwrite: true
+    });
 
-    // Delete the file after 10 minutes 
-    deleteFileAfterTimeout(filePath, 600000);
+    return NextResponse.json({
+      success: true,
+      url: uploadResult.secure_url,
+      message: 'Excel file generated successfully'
+    });
 
-
-    // Return the public URL for downloading the file
-    const publicPath = path.join('/_TEMP', filename);
-    return NextResponse.json({ message: 'Excel file generated', filePath: publicPath });
   } catch (error) {
     console.error('Error generating Excel file:', error);
-    return NextResponse.json({ message: 'Failed to generate Excel file', error: error.message }, { status: 500 });
+    return NextResponse.json({ 
+      success: false,
+      message: 'Failed to generate Excel file', 
+      error: error instanceof Error ? error.message : 'Unknown error' 
+    }, { status: 500 });
   }
 }
+
