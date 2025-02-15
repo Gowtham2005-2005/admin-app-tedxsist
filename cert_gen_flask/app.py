@@ -6,26 +6,57 @@ from flask_cors import CORS
 import re
 import os
 import io
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseUpload
-from google.oauth2.service_account import Credentials
+import time
+import urllib.request
+import shutil
+import json
+
 import firebase_admin
 from firebase_admin import credentials, firestore
+import cloudinary
+import cloudinary.uploader
+import cloudinary.api
+from cloudinary.utils import cloudinary_url
+import requests
+from io import BytesIO
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
+
+# Configure Cloudinary with loaded environment variables
+cloudinary.config(
+    cloud_name = os.getenv('CLOUDINARY_CLOUD_NAME'),
+    api_key = os.getenv('CLOUDINARY_API_KEY'),
+    api_secret = os.getenv('CLOUDINARY_API_SECRET')
+)
+
+# Add this right after cloudinary.config() to debug environment variables
+print("Cloudinary Environment Variables:")
+print(f"CLOUDINARY_CLOUD_NAME: {os.getenv('CLOUDINARY_CLOUD_NAME')}")
+print(f"CLOUDINARY_API_KEY exists: {bool(os.getenv('CLOUDINARY_API_KEY'))}")
+print(f"CLOUDINARY_API_SECRET exists: {bool(os.getenv('CLOUDINARY_API_SECRET'))}")
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}})
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:3000"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Firebase Admin SDK initialization
-cred = credentials.Certificate("path/to/firebase-service-account.json")
-firebase_admin.initialize_app(cred)
-db = firestore.client()
+firebase_service_json = os.getenv("FIREBASE_SERVICE")
 
-# Google Drive API setup
-SCOPES = ["https://www.googleapis.com/auth/drive"]
-drive_credentials = Credentials.from_service_account_file("path/to/google-drive-service-account.json", scopes=SCOPES)
-drive_service = build("drive", "v3", credentials=drive_credentials)
-
+if firebase_service_json:
+    cred_dict = json.loads(firebase_service_json)
+    cred = credentials.Certificate(cred_dict)
+    firebase_admin.initialize_app(cred)
+    db = firestore.client()
+    print("Firebase initialized successfully!")
+else:
+    print("FIREBASE_SERVICE environment variable is missing!")
 def convert_color(color_input):
     """
     Convert color input to RGB format.
@@ -95,65 +126,133 @@ def generate_certificate(name, font_path, font_size, template_path, text_positio
     print(f"Certificate saved to {output_path}")
 
 
-def get_or_create_drive_folder(folder_name):
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+from google.oauth2.service_account import Credentials
+from io import BytesIO
+from PIL import Image, ImageDraw, ImageFont
+import os
+from flask import jsonify, request
+
+import json
+import os
+from io import BytesIO
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+
+def upload_to_google_drive(file_stream, file_name, folder_id):
     """
-    Get or create a Google Drive folder.
+    Upload a file to Google Drive from an in-memory file stream.
+
+    Args:
+        file_stream (BytesIO): In-memory file stream containing the file data.
+        file_name (str): The name of the file.
+        folder_id (str): Google Drive folder ID where the file will be uploaded.
+
+    Returns:
+        str: Link to the uploaded file on Google Drive.
     """
-    query = f"mimeType='application/vnd.google-apps.folder' and name='{folder_name}' and trashed=false"
-    results = drive_service.files().list(q=query, fields="files(id)").execute()
-    folders = results.get("files", [])
+    # Authenticate with Google Drive API
+    SCOPES = ['https://www.googleapis.com/auth/drive.file']
+    # Load credentials from environment variable
+    service_account_json = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
+    # Fix private key formatting
+    service_account_json["private_key"] = service_account_json["private_key"].replace("\\n", "\n")
+
     
-    if folders:
-        return folders[0]["id"]  # Return the first folder's ID if it exists
+    # Use from_service_account_info instead of from_service_account_file
+    creds = Credentials.from_service_account_info(service_account_json, scopes=SCOPES)
+    drive_service = build('drive', 'v3', credentials=creds)
 
-    # Create a new folder
-    folder_metadata = {
-        "name": folder_name,
-        "mimeType": "application/vnd.google-apps.folder"
-    }
-    folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
-    return folder["id"]
-
-def upload_to_google_drive(file_stream, file_name, folder_id, email):
-    """
-    Upload a file to Google Drive and set permissions for the provided email.
-    """
-    media = MediaIoBaseUpload(file_stream, mimetype="image/png")
+    # File metadata
     file_metadata = {
-        "name": file_name,
-        "parents": [folder_id]
+        'name': file_name,
+        'parents': [folder_id]  # Folder to upload the file into
     }
-    uploaded_file = drive_service.files().create(
-        body=file_metadata, media_body=media, fields="id, webViewLink"
-    ).execute()
 
-    # Set permissions for the email
-    drive_service.permissions().create(
-        fileId=uploaded_file["id"],
-        body={
-            "type": "user",
-            "role": "reader",
-            "emailAddress": email
-        },
-        fields="id"
-    ).execute()
+    # Upload the file directly from the in-memory stream
+    media = MediaIoBaseUpload(file_stream, mimetype='image/png')
+    uploaded_file = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
 
-    return uploaded_file
+    # Generate a public link to the file
+    file_id = uploaded_file.get('id')
+    permission = {'type': 'anyone', 'role': 'reader'}
+    drive_service.permissions().create(fileId=file_id, body=permission).execute()
+
+    # Return the public link
+    return f"https://drive.google.com/file/d/{file_id}/view"
 
 @app.route('/api/generateCertificates', methods=['POST'])
 def generate_certificates():
     try:
-        # Get data from the request
         data = request.get_json()
         if not data:
             return jsonify({"message": "Invalid data"}), 400
 
-        # Retrieve participant data from Firestore
-        participants_ref = db.collection("participants")
-        participants = participants_ref.get()
+        # Get template from Cloudinary
+        try:
+            template_resource = cloudinary.api.resource('tedx-certificates/templates/template')
+            template_url = template_resource['secure_url']
+            print(f"Found template at: {template_url}")
+            
+            # Download template
+            response = requests.get(template_url)
+            if response.status_code != 200:
+                return jsonify({
+                    "message": "Failed to download template",
+                    "details": f"HTTP Status: {response.status_code}"
+                }), 500
+            
+            template = Image.open(BytesIO(response.content))
+            print("Successfully loaded template from Cloudinary")
+        except Exception as e:
+            return jsonify({
+                "message": "Template not found",
+                "details": "Please upload a template first",
+                "error": str(e)
+            }), 404
 
-        if not participants:
-            return jsonify({"message": "No participants found"}), 400
+        # Get font from Cloudinary
+        try:
+            # Try both ttf and otf extensions
+            font_extensions = ['ttf', 'otf']
+            font_url = None
+            font_ext = None
+            
+            for ext in font_extensions:
+                try:
+                    font_resource = cloudinary.api.resource(
+                        f'tedx-certificates/fonts/font.{ext}', 
+                        resource_type='raw'
+                    )
+                    font_url = font_resource['secure_url']
+                    font_ext = ext
+                    print(f"Found font at: {font_url}")
+                    break
+                except Exception:
+                    continue
+            
+            if not font_url:
+                raise Exception("No font file found")
+            
+            # Download and save font temporarily
+            font_response = requests.get(font_url)
+            if font_response.status_code != 200:
+                raise Exception(f"Failed to download font: HTTP {font_response.status_code}")
+                
+            temp_font_path = os.path.join(os.path.dirname(__file__), f'temp_font.{font_ext}')
+            with open(temp_font_path, 'wb') as f:
+                f.write(font_response.content)
+            print(f"Font downloaded and saved temporarily as {temp_font_path}")
+                
+        except Exception as e:
+            print(f"Error loading font: {str(e)}")
+            return jsonify({
+                "message": "Font not found",
+                "details": "Please upload a font first",
+                "error": str(e)
+            }), 404
 
         # Get input values
         font_size = int(data.get("fontSize", 72))
@@ -161,91 +260,484 @@ def generate_certificates():
         textX = int(data.get("textX", 300))
         textY = int(data.get("textY", 400))
 
-        # Convert the color to RGB format
         try:
             color = convert_color(color_input)
         except ValueError as e:
             return jsonify({"message": f"Invalid color format: {str(e)}"}), 400
 
-        # Google Drive folder
-        folder_id = get_or_create_drive_folder("tedxsist_cert")
+        # Retrieve participants with attended == true
+        participants_ref = db.collection("participants")
+        participants = participants_ref.where("attend", "==", True).get()
+
+        if not participants:
+            return jsonify({"message": "No participants found with attended == true"}), 400
+
+        drive_links = []
+        folder_id = "14EDF_vrum_g_8ofzUjCpKJzuSrmVtC2C"
+
+        # Load font
+        try:
+            font = ImageFont.truetype(temp_font_path, font_size)
+            print(f"Successfully loaded font with size {font_size}")
+        except Exception as e:
+            print(f"Error loading font, using default: {str(e)}")
+            default_font = get_default_font()
+            if isinstance(default_font, str):
+                font = ImageFont.truetype(default_font, font_size)
+            else:
+                font = default_font
 
         # Process each participant
         for participant in participants:
-            participant_data = participant.to_dict()
-            name = participant_data.get("name", "Participant")
-            email = participant_data.get("email", None)
-            if not email:
-                continue  # Skip participants without an email address
-            
-            # Generate certificate in memory
-            template_path = os.path.join(os.path.dirname(os.getcwd()), 'public', '_TEMP', 'template.png')
-            font_path = os.path.join(os.path.dirname(os.getcwd()), 'public', 'google-fonts', 'font.ttf')
-            
-            # Create an in-memory image stream
-            image_stream = io.BytesIO()
-            template = Image.open(template_path)
-            draw = ImageDraw.Draw(template)
-            
-            # Load font
-            font = ImageFont.truetype(font_path, font_size)
-            draw.text((textX, textY), name, fill=color, font=font)
-            template.save(image_stream, format="PNG")
-            image_stream.seek(0)
-            
-            # Upload to Google Drive
-            uploaded_file = upload_to_google_drive(image_stream, f"{name}_certificate.png", folder_id, email)
+            try:
+                participant_data = participant.to_dict()
+                name = participant_data.get("name", "").strip()
+                email = participant_data.get("email", "").strip().lower()
 
-            # Update Firestore with the Google Drive link and certgen:true
-            participants_ref.document(participant.id).update({
-                "certificateLink": uploaded_file.get("webViewLink"),
-                "certgen": True  # Mark certificate generation as complete
-            })
+                if not email:
+                    continue
+                print(f"Processing certificate for: {name}")
 
-        return jsonify({"message": "Certificates generated, uploaded, and links updated successfully"}), 200
+                # Create new image for each participant
+                cert_image = template.copy()
+                draw = ImageDraw.Draw(cert_image)
+                draw.text((textX, textY), name, fill=color, font=font)
+
+                # Save to BytesIO
+                image_stream = BytesIO()
+                cert_image.save(image_stream, format="PNG")
+                image_stream.seek(0)
+
+                # Upload to Google Drive
+                link = upload_to_google_drive(image_stream, f"{name.replace(' ', '_')}.png", folder_id)
+                drive_links.append({"name": name, "link": link})
+                print(f"Certificate uploaded for {name}: {link}")
+
+                # Update participant's document with the link
+                participant_ref = db.collection("participants").document(participant.id)
+                participant_ref.update({
+                    'certgen': link
+                })
+
+            except Exception as participant_error:
+                print(f"Error processing participant {name}: {str(participant_error)}")
+                continue
+
+        # Clean up temporary font file
+        try:
+            if os.path.exists(temp_font_path):
+                os.remove(temp_font_path)
+                print("Cleaned up temporary font file")
+        except Exception as e:
+            print(f"Warning: Could not remove temporary font file: {str(e)}")
+
+        return jsonify({
+            "message": "Certificates generated, uploaded, and links updated successfully",
+            "links": drive_links
+        }), 200
 
     except Exception as e:
-        return jsonify({"message": f"Error generating certificates: {str(e)}"}), 500
+        print(f"Error generating certificates: {str(e)}")
+        return jsonify({
+            "message": f"Error generating certificates: {str(e)}",
+            "details": str(e)
+        }), 500
 
+def get_cloudinary_resource(public_id):
+    """Get resource from Cloudinary"""
+    try:
+        print(f"Attempting to fetch resource with public_id: {public_id}")
+        # First check if the resource exists
+        resource = cloudinary.api.resource(public_id)
+        print(f"Resource found: {resource}")
+        
+        # Get the URL with secure protocol
+        url = cloudinary_url(public_id, format="png", secure=True)[0]
+        print(f"Generated URL: {url}")
+        
+        response = requests.get(url)
+        if response.status_code != 200:
+            print(f"Failed to fetch image. Status code: {response.status_code}")
+            print(f"Response content: {response.content[:200]}")  # Print first 200 chars of response
+            raise Exception(f"Failed to fetch resource from Cloudinary: {response.status_code}")
+            
+        return Image.open(BytesIO(response.content))
+    except Exception as e:
+        print(f"Error in get_cloudinary_resource: {str(e)}")
+        # Try without the folder structure in the error message
+        template_name = public_id.split('/')[-1]
+        raise Exception(
+            f"Template not found in Cloudinary. Please upload a template first.\n"
+            f"Full path attempted: {public_id}\n"
+            f"Template name: {template_name}"
+        )
 
+def get_default_font():
+    """Get a default system font path"""
+    try:
+        # Try to find Arial or a similar default font based on the operating system
+        if os.name == 'nt':  # Windows
+            font_path = 'C:\\Windows\\Fonts\\arial.ttf'
+        else:  # Linux/Mac
+            font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+        
+        if os.path.exists(font_path):
+            return font_path
+            
+        # If the above fails, try to use PIL's default font
+        return ImageFont.load_default()
+    except Exception as e:
+        print(f"Error loading default font: {e}")
+        return ImageFont.load_default()
 
 @app.route('/api/generateSample', methods=['POST'])
 def generate_sample_certificate():
     try:
-        # Get the data from the request
         data = request.get_json()
         if not data:
             return jsonify({"message": "Invalid data"}), 400
-        
-        # Extract values from the request data and convert to integers where needed
+
+        # First check if template exists in Cloudinary
+        try:
+            template_resource = cloudinary.api.resource('tedx-certificates/templates/template')
+            template_url = template_resource['secure_url']
+            print(f"Found template at: {template_url}")
+        except Exception as e:
+            return jsonify({
+                "message": "Template not found",
+                "details": "Please upload a template first using the upload template endpoint",
+                "error": str(e)
+            }), 404
+            
+        # Check if font exists in Cloudinary and get its format
+        try:
+            # Try both ttf and otf extensions
+            font_extensions = ['ttf', 'otf']
+            font_resource = None
+            font_url = None
+            
+            for ext in font_extensions:
+                try:
+                    font_resource = cloudinary.api.resource(
+                        f'tedx-certificates/fonts/font.{ext}', 
+                        resource_type='raw'
+                    )
+                    font_url = font_resource['secure_url']
+                    print(f"Found font at: {font_url}")
+                    break
+                except Exception:
+                    continue
+            
+            if not font_url:
+                raise Exception("No font file found in either .ttf or .otf format")
+            
+            # Download and save font temporarily
+            font_response = requests.get(font_url)
+            if font_response.status_code != 200:
+                raise Exception(f"Failed to download font: HTTP {font_response.status_code}")
+                
+            temp_font_path = os.path.join(os.path.dirname(__file__), f'temp_font.{ext}')
+            with open(temp_font_path, 'wb') as f:
+                f.write(font_response.content)
+            print(f"Font downloaded and saved temporarily as {temp_font_path}")
+                
+        except Exception as e:
+            print(f"Error loading font: {str(e)}")
+            return jsonify({
+                "message": "Font not found",
+                "details": "Please upload a font first using the upload font endpoint",
+                "error": str(e)
+            }), 404
+
+        # Clear all files in the samples folder
+        try:
+            search_result = cloudinary.search\
+                .expression('folder:tedx-certificates/samples/*')\
+                .execute()
+            
+            if search_result.get('total_count', 0) > 0:
+                for resource in search_result.get('resources', []):
+                    cloudinary.uploader.destroy(
+                        resource['public_id'],
+                        resource_type = "image",
+                        invalidate = True
+                    )
+                print(f"Cleared {search_result['total_count']} files from samples folder")
+        except Exception as e:
+            print(f"Warning: Error while clearing samples folder: {str(e)}")
+
+        # Download template from Cloudinary
+        try:
+            response = requests.get(template_url)
+            if response.status_code != 200:
+                return jsonify({
+                    "message": "Failed to download template",
+                    "details": f"HTTP Status: {response.status_code}"
+                }), 500
+            
+            template = Image.open(BytesIO(response.content))
+            print("Successfully loaded template from Cloudinary")
+        except Exception as e:
+            return jsonify({
+                "message": "Error loading template",
+                "details": str(e)
+            }), 500
+
+        # Get text parameters
         name = data.get("name", "Sample Name")
-        font_size = int(data.get("fontSize", 72))  # Ensure font_size is an integer
-        color_input = data.get("color", [0, 0, 0])  # Default to black if not provided
-        textX = int(data.get("textX", 300))  # Ensure textX is an integer
-        textY = int(data.get("textY", 400))  # Ensure textY is an integer
+        font_size = int(data.get("fontSize", 72))
+        color_input = data.get("color", [0, 0, 0])
+        textX = int(data.get("textX", 300))
+        textY = int(data.get("textY", 400))
         
-        # Convert the color to RGB format
         try:
             color = convert_color(color_input)
         except ValueError as e:
             return jsonify({"message": f"Invalid color format: {str(e)}"}), 400
-        
-        # Define paths to the template, font, and the output path
-        template_path = os.path.join(os.path.dirname(os.getcwd()), 'public', '_TEMP', 'template.png')
-        font_path = os.path.join(os.path.dirname(os.getcwd()), 'public', 'google-fonts', 'font.ttf')
-        output_path = os.path.join(os.path.dirname(os.getcwd()), 'public', '_TEMP', 'sample.png')
 
-        # Ensure the output directory exists
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        # Create a drawing object
+        draw = ImageDraw.Draw(template)
         
-        # Generate and save the certificate image
-        generate_certificate(name, font_path, font_size, template_path, (textX, textY), color, output_path)
+        # Use the downloaded font
+        try:
+            font = ImageFont.truetype(temp_font_path, font_size)
+            print(f"Successfully loaded font with size {font_size}")
+        except Exception as e:
+            print(f"Error loading font, using default: {str(e)}")
+            default_font = get_default_font()
+            if isinstance(default_font, str):
+                font = ImageFont.truetype(default_font, font_size)
+            else:
+                font = default_font
+            print("Using default font as fallback")
         
-        # Return success message
-        return jsonify({"message": "Certificate generated successfully", "file": output_path}), 200
+        # Add text
+        draw.text((textX, textY), name, fill=color, font=font)
+        print(f"Added text '{name}' at position ({textX}, {textY})")
+        
+        # Clean up temporary font file
+        try:
+            if os.path.exists(temp_font_path):
+                os.remove(temp_font_path)
+                print("Cleaned up temporary font file")
+        except Exception as e:
+            print(f"Warning: Could not remove temporary font file: {str(e)}")
+        
+        # Save to BytesIO
+        image_stream = BytesIO()
+        template.save(image_stream, format='PNG')
+        image_stream.seek(0)
+        
+        try:
+            # Upload to Cloudinary
+            upload_result = cloudinary.uploader.upload(
+                image_stream,
+                folder = "tedx-certificates/samples",
+                public_id = "sample",
+                resource_type = "image",
+                overwrite = True,
+                invalidate = True
+            )
+            
+            print(f"Sample certificate uploaded successfully: {upload_result['secure_url']}")
+            
+            return jsonify({
+                "message": "Sample certificate generated successfully",
+                "url": upload_result['secure_url'],
+                "public_id": upload_result['public_id']
+            }), 200
+            
+        except Exception as upload_error:
+            print(f"Upload error: {str(upload_error)}")
+            raise upload_error
 
     except Exception as e:
-        return jsonify({"message": f"Error generating certificate: {str(e)}"}), 500
+        print(f"Error details: {str(e)}")
+        return jsonify({
+            "message": "Error generating sample certificate",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/uploadTemplate', methods=['POST'])
+def upload_template():
+    try:
+        print("Starting template upload process...")
+        
+        if 'template' not in request.files:
+            print("No file found in request.files:", list(request.files.keys()))
+            return jsonify({
+                "message": "No template file provided",
+                "details": "Please include a template file with key 'template' in the request"
+            }), 400
+
+        template_file = request.files['template']
+        print(f"Received file: {template_file.filename}")
+        
+        if template_file.filename == '':
+            return jsonify({
+                "message": "No template file selected",
+                "details": "Please select a file to upload"
+            }), 400
+
+        # Print Cloudinary configuration
+        print("Cloudinary Configuration:")
+        print(f"Cloud name: {cloudinary.config().cloud_name}")
+        print(f"API Key exists: {'api_key' in cloudinary.config().__dict__}")
+
+        # Upload to Cloudinary
+        print("Attempting to upload to Cloudinary...")
+        upload_result = cloudinary.uploader.upload(
+            template_file,
+            folder = "tedx-certificates/templates",
+            public_id = "template",  # Fixed public_id for the template
+            resource_type = "image",
+            overwrite = True,  # Override existing template if any
+            unique_filename = False  # Ensure we don't get a random suffix
+        )
+        
+        print("Upload successful!")
+        print(f"Upload result: {upload_result}")
+
+        # Verify the upload by trying to access it
+        try:
+            verification = cloudinary.api.resource(upload_result['public_id'])
+            print(f"Verification successful: {verification}")
+        except Exception as verify_error:
+            print(f"Verification failed: {str(verify_error)}")
+            raise verify_error
+
+        return jsonify({
+            "message": "Template uploaded successfully",
+            "url": upload_result['secure_url'],
+            "public_id": upload_result['public_id'],
+            "resource_type": upload_result['resource_type'],
+            "type": upload_result['type'],
+            "format": upload_result.get('format', 'unknown')
+        }), 200
+
+    except Exception as e:
+        print(f"Error details: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "message": "Error uploading template",
+            "details": str(e),
+            "error_type": str(type(e))
+        }), 500
+
+@app.route('/api/checkTemplate', methods=['GET'])
+def check_template():
+    try:
+        template_path = "tedx-certificates/templates/template"
+        print(f"Checking template at: {template_path}")
+        
+        # Try to get the resource info
+        resource = cloudinary.api.resource(template_path)
+        
+        return jsonify({
+            "message": "Template found",
+            "details": {
+                "public_id": resource['public_id'],
+                "url": resource['url'],
+                "format": resource['format'],
+                "version": resource['version']
+            }
+        }), 200
+    except Exception as e:
+        print(f"Error checking template: {str(e)}")
+        return jsonify({
+            "message": "Template not found",
+            "details": str(e),
+            "help": "Please upload a template using the /api/uploadTemplate endpoint"
+        }), 404
+
+@app.route('/api/testCloudinary', methods=['GET'])
+def test_cloudinary():
+    try:
+        # Test Cloudinary configuration
+        config = cloudinary.config()
+        
+        # Create a simple test
+        test_result = {
+            "cloud_name": config.cloud_name,
+            "api_key_configured": bool(config.api_key),
+            "api_secret_configured": bool(config.api_secret),
+            "configuration_valid": all([
+                config.cloud_name,
+                config.api_key,
+                config.api_secret
+            ])
+        }
+        
+        return jsonify({
+            "message": "Cloudinary configuration test",
+            "details": test_result
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "message": "Error testing Cloudinary configuration",
+            "details": str(e)
+        }), 500
+
+@app.route('/api/setupFont', methods=['GET'])
+def setup_font():
+    try:
+        fonts_dir = os.path.join(os.path.dirname(__file__), 'fonts')
+        font_path = os.path.join(fonts_dir, 'font.ttf')
+        
+        # Create fonts directory if it doesn't exist
+        if not os.path.exists(fonts_dir):
+            os.makedirs(fonts_dir)
+        
+        # Download Roboto Regular font if it doesn't exist
+        if not os.path.exists(font_path):
+            font_url = "https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Regular.ttf"
+            print(f"Downloading font from {font_url}")
+            
+            # Download with proper headers
+            headers = {'User-Agent': 'Mozilla/5.0'}
+            req = urllib.request.Request(font_url, headers=headers)
+            with urllib.request.urlopen(req) as response, open(font_path, 'wb') as out_file:
+                shutil.copyfileobj(response, out_file)
+            
+            print(f"Font downloaded to {font_path}")
+        
+        return jsonify({
+            "message": "Font setup successful",
+            "path": font_path
+        }), 200
+        
+    except Exception as e:
+        print(f"Error setting up font: {str(e)}")
+        return jsonify({
+            "message": "Error setting up font",
+            "details": str(e)
+        }), 500
+
+@app.route('/get-sample', methods=['GET'])
+def get_sample():
+    try:
+        # Try to get the sample certificate from Cloudinary
+        try:
+            resource = cloudinary.api.resource('tedx-certificates/samples/sample')
+            return jsonify({
+                "url": resource['secure_url']
+            }), 200
+        except Exception as e:
+            print(f"Error fetching sample from Cloudinary: {str(e)}")
+            return jsonify({
+                "message": "No sample certificate found",
+                "details": "Please generate a sample first"
+            }), 404
+            
+    except Exception as e:
+        print(f"Error in get-sample endpoint: {str(e)}")
+        return jsonify({
+            "message": "Error retrieving sample certificate",
+            "details": str(e)
+        }), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
