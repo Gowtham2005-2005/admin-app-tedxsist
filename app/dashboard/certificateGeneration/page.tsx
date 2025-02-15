@@ -1,6 +1,8 @@
 'use client'
 import React, { useState, useRef,useEffect } from 'react';
 import { Settings,Eye, RefreshCw } from "lucide-react";
+import { JwtPayload } from "jwt-decode";
+
 import {
   Card,
   CardContent,
@@ -40,6 +42,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+
+interface CustomJwtPayload extends JwtPayload {
+  name?: string;
+  email?: string;
+  // Add other expected properties from your JWT token
+}
+
 export default function CertificateGeneration() {
   const [dimensions, setDimensions] = useState({
     font_size: '200',
@@ -66,11 +75,11 @@ export default function CertificateGeneration() {
   };
   const router = useRouter();
   const token = sessionStorage.getItem('Token');
-  let user = null;
+  let user: CustomJwtPayload | null = null;
 
   if (token) {
     try { 
-      user = jwtDecode(token); // Decoding the token and storing user info
+      user = jwtDecode<CustomJwtPayload>(token); // Use the custom type
     } catch (error) {
       console.error('Invalid token:', error);
     }
@@ -127,7 +136,7 @@ const handleFontUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     }
 
     setSelectedFile(file);
-    toast.success(`Hey ${user?.name}, Template uploaded successfully!`);
+    toast.success(`Hey ${user?.name || 'User'}, Template uploaded successfully!`);
   };
 const handleSaveClick = async () => {
     if (!selectedFile) {
@@ -163,7 +172,7 @@ const handleSaveClick = async () => {
   };
 
   const handleSendEmail = () => {
-    toast.success(`Hey ${user?.name}, Email has been sent successfully!`);
+    toast.success(`Hey ${user?.name || 'User'}, Email has been sent successfully!`);
   };
 
   const handleCreateSampleClick = async () => {
@@ -191,7 +200,7 @@ const handleSaveClick = async () => {
     });
 
     if (response.ok) {
-      toast.success(`Hey ${user?.name}, Sample Generated!`);
+      toast.success(`Hey ${user?.name || 'User'}, Sample Generated!`);
     } else {
       const errorData = await response.json();
 toast.error('Failed to generate sample: ' + (errorData.message || 'Unknown error occurred'));
@@ -227,7 +236,7 @@ setLoading(true);
     });
     const data = await response.json();
     if (response.ok) {
-    toast.success(`Hey ${user?.name}, Certificates Generated!`);
+    toast.success(`Hey ${user?.name || 'User'}, Certificates Generated!`);
     } else {
       toast.error(data.message || 'Failed to generate Certificate');
     }
@@ -250,6 +259,95 @@ setLoading(true);
 
   const handleClose = () => {
     setIsDrawerOpen(false);
+  };
+
+  interface SampleDrawerProps {
+    isDrawerOpen: boolean;
+    handleClose: () => void;
+  }
+  
+  const SampleDrawer: React.FC<SampleDrawerProps> = ({ isDrawerOpen, handleClose }) => {
+    const [imageUrl, setImageUrl] = useState<string>("");
+    const [error, setError] = useState<string>("");
+  
+    useEffect(() => {
+      if (isDrawerOpen) {
+        setError(""); // Clear any previous errors
+        // Fetch the sample image when drawer opens
+        fetch("http://localhost:5000/get-sample", {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          mode: 'cors' // Enable CORS
+        })
+          .then((res) => {
+            if (!res.ok) {
+              return res.json().then(err => {
+                throw new Error(err.message || 'No sample certificate found. Please generate one first.');
+              });
+            }
+            return res.json();
+          })
+          .then((data) => {
+            if (data.url) {
+              setImageUrl(data.url);
+            } else {
+              throw new Error('Invalid response format');
+            }
+          })
+          .catch((error) => {
+            const errorMessage = error.message === 'Failed to fetch' 
+              ? 'Unable to connect to the server. Please check if the server is running.'
+              : error.message;
+            console.error("Error fetching sample certificate:", errorMessage);
+            setError(errorMessage);
+            toast.error(errorMessage);
+          });
+      } else {
+        // Clear the image URL when drawer closes
+        setImageUrl("");
+      }
+    }, [isDrawerOpen]);
+  
+    return (
+      <Drawer open={isDrawerOpen} onClose={handleClose}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle className="flex justify-center">View Sample</DrawerTitle>
+            <DrawerDescription className="flex justify-center">
+              Check Whether the Alignment for the generated Certificate is proper
+            </DrawerDescription>
+          </DrawerHeader>
+          <div className="flex justify-center my-4">
+            <div className="relative w-full h-[400px]">
+              {error ? (
+                <p className="text-center text-red-500">{error}</p>
+              ) : imageUrl ? (
+                <Image
+                  src={imageUrl}
+                  alt="Sample Certificate"
+                  className="object-contain"
+                  quality={100}
+                  fill
+                  priority
+                />
+              ) : (
+                <p className="text-center">Loading sample certificate...</p>
+              )}
+            </div>
+          </div>
+          <DrawerFooter>
+            <div className="flex justify-center">
+              <DrawerClose asChild>
+                <Button variant="outline">Close</Button>
+              </DrawerClose>
+            </div>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    );
   };
 
   return (
@@ -371,36 +469,7 @@ setLoading(true);
           View Sample
         </Button>
 
-        <Drawer open={isDrawerOpen} onClose={handleClose}>
-          <DrawerContent>
-            <DrawerHeader>
-              <DrawerTitle className="flex justify-center">View Sample</DrawerTitle>
-              <DrawerDescription className="flex justify-center">Check Whether the Alignment for the generated Certificate is proper</DrawerDescription>
-            </DrawerHeader>
-            <div className="flex justify-center my-4">
-              <div className="relative w-full h-[400px]"> {/* Adjust `h-[400px]` as needed */}
-  <Image
-    src={`/_TEMP/sample.png?v=${new Date().getTime()}`}
-    alt="Sample Certificate"
-    className="object-contain"
-    quality={100}
-    fill
-    priority
-  />
-</div>
-
-
-
-            </div>
-            <DrawerFooter>
-              <div className="flex justify-center">
-                <DrawerClose asChild>
-                  <Button variant="outline">Close</Button>
-                </DrawerClose>
-              </div>
-            </DrawerFooter>
-          </DrawerContent>
-        </Drawer>
+        <SampleDrawer isDrawerOpen={isDrawerOpen} handleClose={handleClose} />
       </div>
 
       <Button className="flex-1" onClick={handleCreateClick}>
@@ -430,7 +499,7 @@ setLoading(true);
               403
             </span>
             <h2 className="my-2 font-heading text-2xl font-bold">
-              Hey {user?.name}
+              Hey {user?.name || 'User'}
             </h2>
             <p>
               Probably you are using a mobile view. Please switch to desktop for this page.
@@ -452,4 +521,4 @@ setLoading(true);
       </section>
     </>
   )
-}
+};

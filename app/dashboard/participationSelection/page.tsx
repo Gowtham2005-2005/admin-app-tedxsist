@@ -83,7 +83,7 @@ export default function ParticipationSelection() {
     fetchParticipants();
   }, []);
 
-  const handleSendEmail = async () => {
+  const handleSendEmail = async (type) => {
     // Separate participants into selected and not selected
     const selectedParticipants = participants.filter((p) => p.selected);
     const notSelectedParticipants = participants.filter((p) => !p.selected);
@@ -113,46 +113,57 @@ export default function ParticipationSelection() {
     console.log("Not selected email details:", notSelectedEmailDetails);
   
     try {
-      // Send emails to selected participants
-      const selectedResponse = await fetch('/api/sendselectedEmail', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`, // Include token if required
-        },
-        body: JSON.stringify(selectedEmailDetails),
-      });
-  
-      const selectedResponseText = await selectedResponse.text(); // Debugging raw response
-      console.log("Selected Response:", selectedResponseText);
-  
-      if (selectedResponse.ok) {
-        toast.success(`Emails sent to ${selectedEmailAddresses.length} selected participants!`);
-      } else {
-        const errorResponse = JSON.parse(selectedResponseText);
-        toast.error(`Failed to send emails to selected participants: ${errorResponse.message || "Unknown error"}`);
+      // Check if no participants are selected and show a message
+      if (selectedParticipants.length === 0 && type === 'selected') {
+        toast.error("No participants are selected.");
+        return; // Exit early if no participants are selected
       }
   
-      // Send emails to not selected participants
-      const notSelectedResponse = await fetch('/api/sendnotselectedEmail', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`, // Include token if required
-        },
-        body: JSON.stringify(notSelectedEmailDetails),
-      });
+      // Conditionally send emails based on the type argument
+      if (type === 'selected') {
+        // Send emails to selected participants
+        const selectedResponse = await fetch('/api/sendselectedEmail', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`, // Include token if required
+          },
+          body: JSON.stringify(selectedEmailDetails),
+        });
   
-      const notSelectedResponseText = await notSelectedResponse.text(); // Debugging raw response
-      console.log("Not Selected Response:", notSelectedResponseText);
+        const selectedResponseText = await selectedResponse.text(); // Debugging raw response
+        console.log("Selected Response:", selectedResponseText);
   
-      if (notSelectedResponse.ok) {
-        toast.success(`Emails sent to ${notSelectedEmailAddresses.length} not selected participants!`);
+        if (selectedResponse.ok) {
+          toast.success(`Emails sent to ${selectedEmailAddresses.length} selected participants!`);
+        } else {
+          const errorResponse = JSON.parse(selectedResponseText);
+          toast.error(`Failed to send emails to selected participants: ${errorResponse.message || "Unknown error"}`);
+        }
+      } else if (type === 'rejected') {
+        // Send emails to not selected participants
+        const notSelectedResponse = await fetch('/api/sendnotselectedEmail', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`, // Include token if required
+          },
+          body: JSON.stringify(notSelectedEmailDetails),
+        });
+  
+        const notSelectedResponseText = await notSelectedResponse.text(); // Debugging raw response
+        console.log("Not Selected Response:", notSelectedResponseText);
+  
+        if (notSelectedResponse.ok) {
+          toast.success(`Emails sent to ${notSelectedEmailAddresses.length} not selected participants!`);
+        } else {
+          const errorResponse = JSON.parse(notSelectedResponseText);
+          toast.error(`Failed to send emails to not selected participants: ${errorResponse.message || "Unknown error"}`);
+        }
       } else {
-        const errorResponse = JSON.parse(notSelectedResponseText);
-        toast.error(`Failed to send emails to not selected participants: ${errorResponse.message || "Unknown error"}`);
+        // If 'type' is not recognized, you can either handle both or give a warning
+        toast.error("Invalid type specified. Please use 'selected' or 'notselected'.");
       }
-  
     } catch (error) {
       console.error('Error sending email:', error);
       toast.error('Something went wrong while sending emails.');
@@ -163,7 +174,10 @@ export default function ParticipationSelection() {
   
   
   const handleDownloadExcelClick = () => {
-    setIsSheetOpen(true); // Open the sheet when "Download Excel" is clicked
+    setIsSheetOpen(true);
+    // Assuming the response gives the correct Cloudinary URL
+  
+// Open the sheet when "Download Excel" is clicked
   };
 
 const handledownload = async () => {
@@ -171,21 +185,25 @@ const handledownload = async () => {
     const response = await fetch('/api/generateExcel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+
       body: JSON.stringify(participants), // Send participants data
     });
 
-    if (response.ok) {
-      const { filePath } = await response.json();
+    const result = await response.json();
+    if (result.success) {
+      const cloudinaryUrl = result.url;
 
-      // Construct the full URL
-      const fileUrl = `${window.location.origin}${filePath}`;
 
-      // Trigger file download
-      const link = document.createElement('a');
-      link.href = fileUrl;
-      link.download = 'Participants.xlsx';
-      link.click();
+    // Create an anchor element
+    const link = document.createElement("a");
+    link.href = cloudinaryUrl;
+    link.download = "participants.xlsx"; // Suggested filename
 
+    // Append to body, trigger click, and remove it
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
       toast.success('Excel file downloaded successfully!');
     } else {
       toast.error('Failed to generate Excel file.');

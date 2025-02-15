@@ -9,6 +9,7 @@ import io
 import time
 import urllib.request
 import shutil
+import json
 
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -37,13 +38,25 @@ print(f"CLOUDINARY_API_KEY exists: {bool(os.getenv('CLOUDINARY_API_KEY'))}")
 print(f"CLOUDINARY_API_SECRET exists: {bool(os.getenv('CLOUDINARY_API_SECRET'))}")
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": ["http://localhost:3000", "http://127.0.0.1:3000"]}})
+CORS(app, resources={
+    r"/*": {
+        "origins": ["http://localhost:3000"],
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"]
+    }
+})
 
 # Firebase Admin SDK initialization
-cred = credentials.Certificate("central-app-735d2-firebase-adminsdk-tjvv7-f480680963.json")
-firebase_admin.initialize_app(cred)
-db = firestore.client()
+firebase_service_json = os.getenv("FIREBASE_SERVICE")
 
+if firebase_service_json:
+    cred_dict = json.loads(firebase_service_json)
+    cred = credentials.Certificate(cred_dict)
+    firebase_admin.initialize_app(cred)
+    db = firestore.client()
+    print("Firebase initialized successfully!")
+else:
+    print("FIREBASE_SERVICE environment variable is missing!")
 def convert_color(color_input):
     """
     Convert color input to RGB format.
@@ -121,6 +134,13 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 from flask import jsonify, request
 
+import json
+import os
+from io import BytesIO
+from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
+
 def upload_to_google_drive(file_stream, file_name, folder_id):
     """
     Upload a file to Google Drive from an in-memory file stream.
@@ -135,7 +155,14 @@ def upload_to_google_drive(file_stream, file_name, folder_id):
     """
     # Authenticate with Google Drive API
     SCOPES = ['https://www.googleapis.com/auth/drive.file']
-    creds = Credentials.from_service_account_file('credentials/service.json', scopes=SCOPES)
+    # Load credentials from environment variable
+    service_account_json = json.loads(os.getenv("GOOGLE_CREDENTIALS"))
+    # Fix private key formatting
+    service_account_json["private_key"] = service_account_json["private_key"].replace("\\n", "\n")
+
+    
+    # Use from_service_account_info instead of from_service_account_file
+    creds = Credentials.from_service_account_info(service_account_json, scopes=SCOPES)
     drive_service = build('drive', 'v3', credentials=creds)
 
     # File metadata
@@ -155,7 +182,6 @@ def upload_to_google_drive(file_stream, file_name, folder_id):
 
     # Return the public link
     return f"https://drive.google.com/file/d/{file_id}/view"
-
 
 @app.route('/api/generateCertificates', methods=['POST'])
 def generate_certificates():
@@ -687,6 +713,29 @@ def setup_font():
         print(f"Error setting up font: {str(e)}")
         return jsonify({
             "message": "Error setting up font",
+            "details": str(e)
+        }), 500
+
+@app.route('/get-sample', methods=['GET'])
+def get_sample():
+    try:
+        # Try to get the sample certificate from Cloudinary
+        try:
+            resource = cloudinary.api.resource('tedx-certificates/samples/sample')
+            return jsonify({
+                "url": resource['secure_url']
+            }), 200
+        except Exception as e:
+            print(f"Error fetching sample from Cloudinary: {str(e)}")
+            return jsonify({
+                "message": "No sample certificate found",
+                "details": "Please generate a sample first"
+            }), 404
+            
+    except Exception as e:
+        print(f"Error in get-sample endpoint: {str(e)}")
+        return jsonify({
+            "message": "Error retrieving sample certificate",
             "details": str(e)
         }), 500
 
