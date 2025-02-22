@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { db, doc, updateDoc } from "@/firebase";
+import React, { useState, useEffect } from "react";
+import { doc, updateDoc, getDoc, setDoc, increment, onSnapshot } from "firebase/firestore";
+import { db } from "@/firebase";
 import {
   ColumnDef,
   SortingState,
@@ -60,9 +61,25 @@ export type Participant = {
 const updateParticipantSelection = async (participant: Participant) => {
   try {
     const participantRef = doc(db, "participants", participant.id);
+    const selectedCounterRef = doc(db, "selected", "selected");
+
+    // First update the participant's selection status
     await updateDoc(participantRef, {
       selected: participant.selected,
     });
+
+    // Get the current counter document
+    const selectedDoc = await getDoc(selectedCounterRef);
+    
+    if (!selectedDoc.exists()) {
+      // Create the document if it doesn't exist, initialize with 1 or 0 based on selection
+      await setDoc(selectedCounterRef, { count: participant.selected ? 1 : 0 });
+    } else {
+      // Update the counter based on selection status
+      await updateDoc(selectedCounterRef, {
+        count: increment(participant.selected ? 1 : -1)
+      });
+    }
   } catch (error) {
     console.error("Error updating participant selection: ", error);
   }
@@ -80,6 +97,22 @@ export const DataTableDemo = ({ participants: initialParticipants, onSelectionCh
   const [rowSelection, setRowSelection] = useState({});
   const [currentParticipant, setCurrentParticipant] = useState<Participant | null>(null);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [selectedCount, setSelectedCount] = useState(0);
+
+  useEffect(() => {
+    // Set up real-time listener for the selected count
+    const selectedCounterRef = doc(db, "selected", "selected");
+    const unsubscribe = onSnapshot(selectedCounterRef, (doc) => {
+      if (doc.exists()) {
+        setSelectedCount(doc.data().count || 0);
+      } else {
+        setSelectedCount(0);
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []);
 
   const handleCheckboxChange = (participant: Participant, newValue: boolean) => {
   setCurrentParticipant({ ...participant, selected: newValue });
@@ -341,7 +374,7 @@ const confirmSelectionUpdate = async () => {
 
     <div className="flex items-center justify-end space-x-2 py-4">
         <div className="flex-1 text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
+          {selectedCount} of{" "}
           {table.getFilteredRowModel().rows.length} row(s) selected.
         </div>
         <div className="space-x-2">

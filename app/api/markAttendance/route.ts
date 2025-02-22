@@ -1,4 +1,4 @@
-import { db, doc, getDoc, updateDoc } from '@/firebase'; // Import Firestore functions
+import { adminDb } from '@/firebase-admin'; // Import Firebase Admin SDK
 import { NextRequest, NextResponse } from 'next/server';
 
 // API endpoint to get participant data based on QR result
@@ -9,16 +9,22 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Query the collection to find the document where 'id' matches qrResult
+    const participantQuery = await adminDb.collection('participants').where('id', '==', qrResult).get();
 
-
-    const participantRef = doc(db, 'participants', qrResult);
-    const participantDoc = await getDoc(participantRef);
-
-    if (!participantDoc.exists()) {
+    if (participantQuery.empty) {
       return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
     }
 
-    return NextResponse.json(participantDoc.data());
+    // Get the first matching document
+    const participantDoc = participantQuery.docs[0];
+    const data = participantDoc.data();
+
+    // Return participant data
+    return NextResponse.json({
+      ...data,
+      id: data?.id || qrResult, // Use data.id if exists, fallback to qrResult
+    });
   } catch (error) {
     console.error('Error fetching participant data:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -28,33 +34,41 @@ export async function GET(request: NextRequest) {
 // API endpoint to mark attendance
 export async function POST(request: NextRequest) {
   try {
-    const { qrResult, qrResultTimestamp,userName } = await request.json();
+    const { qrResult, qrResultTimestamp, userName } = await request.json();
 
     if (!qrResult || !qrResultTimestamp || !userName) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const participantRef = doc(db, 'participants', qrResult);
-    const participantDoc = await getDoc(participantRef);
+    // Query the collection to find the document where 'id' matches qrResult
+    const participantQuery = await adminDb.collection('participants').where('id', '==', qrResult).get();
 
-    if (!participantDoc.exists()) {
+    if (participantQuery.empty) {
       return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
     }
 
-    await updateDoc(participantRef, {
+    // Get the first matching document
+    const participantDoc = participantQuery.docs[0];
+    const participantRef = participantDoc.ref;
+    const data = participantDoc.data();
+
+    // Update attendance using admin SDK
+    await participantRef.update({
       attend: true,
       timestamp: qrResultTimestamp,
       markedBy: userName,
     });
 
-    const updatedParticipant = {
-      id: participantDoc.id,
-      ...participantDoc.data(),
-    };
-
-    return NextResponse.json(updatedParticipant);
+    // Return updated participant data
+    return NextResponse.json({
+      ...data,
+      id: data?.id || qrResult, // Use data.id if exists, fallback to qrResult
+      attend: true,
+      timestamp: qrResultTimestamp,
+      markedBy: userName,
+    });
   } catch (error) {
-    console.error('Error updating attendance:', error);
+    console.error('Error marking attendance:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

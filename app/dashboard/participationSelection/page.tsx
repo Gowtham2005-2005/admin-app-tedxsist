@@ -83,7 +83,7 @@ export default function ParticipationSelection() {
       const participantSnapshot = await getDocs(participantsCollection);
       const participantList = participantSnapshot.docs.map((doc) => ({
         ...doc.data(),
-        id: doc.id,
+        id: doc.data().id,
         selected: doc.data().selected || false, // Ensure "selected" field is fetched and initialized
       })) as Participant[];
       setParticipants(participantList);
@@ -109,12 +109,14 @@ export default function ParticipationSelection() {
     const selectedEmailDetails = {
       to: selectedEmailAddresses,
       usernames: selectedUsernames,
+      participantIds: selectedParticipants.map(p => p.id), // Using the document ID from Firestore
     };
   
     // Prepare email data for not selected participants
     const notSelectedEmailDetails = {
       to: notSelectedEmailAddresses,
       usernames: notSelectedUsernames,
+      participantIds: notSelectedParticipants.map(p => p.id), // Using the document ID from Firestore
     };
   
     console.log("Selected email details:", selectedEmailDetails);
