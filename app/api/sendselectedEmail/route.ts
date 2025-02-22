@@ -20,8 +20,8 @@ export const POST = async (request: Request) => {
     const predefinedTextTemplate = 'Hi $username, you have been successfully registered for TEDx!';
     const predefinedHTMLTemplate = `
       <p>Hi <strong>$username</strong>,</p>
-      <p>You have been selected for <strong>TEDx</strong>!</p>
-      <p>We’re excited to have you on board.</p>
+      <p>please ignore this mail, we're testing our backend. If you reach this we're extremely sorry</p>
+      <p>On behalf of tedxsist tech team</p>
     `;
 
     // Set email credentials
@@ -77,10 +77,11 @@ export const POST = async (request: Request) => {
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error: Error | unknown) {
     console.error('Error while sending email:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return NextResponse.json(
-      { message: 'Failed to send email', error: error.response || error.message },
+      { message: 'Failed to send email', error: errorMessage },
       { status: 500 }
     );
   }

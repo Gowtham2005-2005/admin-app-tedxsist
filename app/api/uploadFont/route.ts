@@ -1,10 +1,5 @@
 import { NextResponse } from 'next/server';
-import { v2 as cloudinary } from 'cloudinary';
-
-interface CloudinaryResponse {
-  secure_url: string;
-  public_id: string;
-}
+import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 
 // Configure Cloudinary
 cloudinary.config({
@@ -50,14 +45,14 @@ async function clearFontFolder() {
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
-    const file = formData.get('file');
-
-    if (!file || !(file instanceof Blob)) {
-      return NextResponse.json({ error: 'No valid file uploaded' }, { status: 400 });
+    const file = formData.get('file') as File;
+    
+    if (!file) {
+      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
     }
 
     // Check file name and extension
-    const filename = (file as any).name || 'uploaded-font';
+    const filename = file.name || 'uploaded-font';
     const fileExtension = filename.split('.').pop()?.toLowerCase();
     
     if (!['ttf', 'otf'].includes(fileExtension || '')) {
@@ -74,13 +69,23 @@ export async function POST(request: Request) {
 
     console.log('Uploading new font to Cloudinary...');
     // Upload to Cloudinary
-    const uploadResponse = await cloudinary.uploader.upload(dataURI, {
-      resource_type: 'raw',
-      folder: 'tedx-certificates/fonts',
-      public_id: 'font',  // Will save as font.ttf or font.otf
-      format: fileExtension,
-      overwrite: true,
-      invalidate: true
+    const uploadResponse: UploadApiResponse = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload(dataURI, {
+        resource_type: 'raw',
+        folder: 'tedx-certificates/fonts',
+        public_id: 'font',  // Will save as font.ttf or font.otf
+        format: fileExtension,
+        overwrite: true,
+        invalidate: true
+      }, (error, result) => {
+        if (error) {
+          reject(error);
+        } else if (result) {
+          resolve(result);
+        } else {
+          reject(new Error('Upload failed: No result returned'));
+        }
+      });
     });
 
     console.log('Font uploaded successfully. URL:', uploadResponse.secure_url);

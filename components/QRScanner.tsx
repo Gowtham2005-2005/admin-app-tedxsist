@@ -10,51 +10,57 @@ const QRScanner = ({ onScan }: QRScannerProps) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const scannerRef = useRef<QrScanner | null>(null);
 
-  const startScanner = () => {
-    if (videoRef.current) {
-      const qrScanner = new QrScanner(
-        videoRef.current,
-        (result) => {
-          if (result?.data) {
-            const timestamp = new Date().toString();
-            onScan(result.data, timestamp); // Send result and timestamp to the parent
-            qrScanner.stop(); // Stop the scanner once a QR code is detected
-          }
-        },
-        {
-          onDecodeError: (error) => {
-            console.warn('Decode Error:', error); // Log the error but do not trigger onScan
-          },
-          highlightScanRegion: true,
-          highlightCodeOutline: true,
-        }
-      );
-
-      scannerRef.current = qrScanner;
-
-      qrScanner.start().then(() => {
-        // Optionally, list cameras or select a default camera
-        QrScanner.listCameras(true).then((cameras) => {
-          const rearCamera = cameras.find((camera) =>
-            camera.id.includes('environment')
-          )?.id;
-          if (rearCamera) {
-            qrScanner.setCamera(rearCamera); // Use rear camera by default
-          }
-        });
-      });
-    }
-  };
-
   useEffect(() => {
-    startScanner(); // Automatically start the scanner when the component mounts
+    const initScanner = async () => {
+      if (!videoRef.current) return;
+      
+      try {
+        if (scannerRef.current) {
+          scannerRef.current.stop();
+        }
 
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current.stop(); // Clean up the scanner when the component unmounts
+        scannerRef.current = new QrScanner(
+          videoRef.current,
+          (result) => {
+            if (result?.data) {
+              const timestamp = new Date().toString();
+              onScan(result.data, timestamp); // Send result and timestamp to the parent
+              scannerRef.current?.stop(); // Stop the scanner once a QR code is detected
+            }
+          },
+          {
+            onDecodeError: (error) => {
+              console.warn('Decode Error:', error); // Log the error but do not trigger onScan
+            },
+            highlightScanRegion: true,
+            highlightCodeOutline: true,
+          }
+        );
+
+        await scannerRef.current.start().then(() => {
+          // Optionally, list cameras or select a default camera
+          QrScanner.listCameras(true).then((cameras) => {
+            const rearCamera = cameras.find((camera) =>
+              camera.id.includes('environment')
+            )?.id;
+            if (rearCamera) {
+              scannerRef.current?.setCamera(rearCamera); // Use rear camera by default
+            }
+          });
+        });
+      } catch (error) {
+        console.error('Error starting QR scanner:', error);
       }
     };
-  }, []);
+
+    initScanner();
+    
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.stop();
+      }
+    };
+  }, [onScan]);
 
   return (
     <div className="text-foreground">

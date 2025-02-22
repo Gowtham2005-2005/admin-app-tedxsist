@@ -3,7 +3,7 @@ import React, { useState, useEffect } from "react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/firebase"; // Import your Firebase instance
 import { useRouter } from "next/navigation";
-import { jwtDecode } from "jwt-decode";
+import { jwtDecode, JwtPayload } from "jwt-decode";
 
 import { DataTableDemo } from "@/components/datatable";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,11 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
+interface UserPayload extends JwtPayload {
+  name: string;
+  email: string;
+}
+
 export interface Participant {
   id: string;
   name: string;
@@ -52,22 +57,25 @@ export default function ParticipationSelection() {
 
   
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [emailData, setEmailData] = useState({ subject: '', text: '' });
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false); // State to control the Sheet visibility
   const router = useRouter();
-  const token = sessionStorage.getItem('Token');
-  const [isLoading, setIsLoading] = useState(false);
-  let user = null;
+  const [user, setUser] = useState<UserPayload | null>(null);
 
-  if (token) {
-    try {
-      user = jwtDecode(token); // Decoding the token and storing user info
-    } catch (error) {
-      console.error('Invalid token:', error);
+  useEffect(() => {
+    const token = sessionStorage.getItem('Token');
+    if (token) {
+      try {
+        const decoded = jwtDecode<UserPayload>(token);
+        setUser(decoded);
+      } catch (error) {
+        console.error('Invalid token:', error);
+        router.push('/');
+      }
+    } else {
+      router.push('/');
     }
-  }
-
+  }, [router]);
 
   useEffect(() => {
     const fetchParticipants = async () => {
@@ -83,7 +91,7 @@ export default function ParticipationSelection() {
     fetchParticipants();
   }, []);
 
-  const handleSendEmail = async (type) => {
+  const handleSendEmail = async (type: 'selected' | 'notselected') => {
     // Separate participants into selected and not selected
     const selectedParticipants = participants.filter((p) => p.selected);
     const notSelectedParticipants = participants.filter((p) => !p.selected);
@@ -126,7 +134,7 @@ export default function ParticipationSelection() {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`, // Include token if required
+            Authorization: `Bearer ${sessionStorage.getItem('Token')}`, // Include token if required
           },
           body: JSON.stringify(selectedEmailDetails),
         });
@@ -140,13 +148,13 @@ export default function ParticipationSelection() {
           const errorResponse = JSON.parse(selectedResponseText);
           toast.error(`Failed to send emails to selected participants: ${errorResponse.message || "Unknown error"}`);
         }
-      } else if (type === 'rejected') {
+      } else if (type === 'notselected') {
         // Send emails to not selected participants
         const notSelectedResponse = await fetch('/api/sendnotselectedEmail', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`, // Include token if required
+            Authorization: `Bearer ${sessionStorage.getItem('Token')}`, // Include token if required
           },
           body: JSON.stringify(notSelectedEmailDetails),
         });
@@ -284,7 +292,7 @@ const handledownload = async () => {
     </AlertDialogHeader>
     <AlertDialogFooter>
       <AlertDialogCancel onClick={() => setIsAlertOpen(false)}>Cancel</AlertDialogCancel>
-      <AlertDialogAction onClick={() => handleSendEmail('rejected')}>Continue</AlertDialogAction> {/* Passing 'rejected' to send emails to rejected participants */}
+      <AlertDialogAction onClick={() => handleSendEmail('notselected')}>Continue</AlertDialogAction> {/* Passing 'notselected' to send emails to rejected participants */}
     </AlertDialogFooter>
   </AlertDialogContent>
 </AlertDialog>
@@ -294,7 +302,9 @@ const handledownload = async () => {
               <SheetTrigger />
               <SheetContent>
                 <SheetHeader className="space-y-2">
-                  <SheetTitle className="text-xl font-semibold">Hey {user.name} 🙋‍♂️ </SheetTitle>
+                  <SheetTitle className="text-xl font-semibold">
+                    Hey {user?.name ? user.name : 'there'} 🙋‍♂️
+                  </SheetTitle>
                   <SheetDescription className="text-sm text-muted-foreground">
                     Download the data of student participants registered for TEDxSIST Feb 2025.<br/>
                   </SheetDescription>
@@ -321,7 +331,7 @@ const handledownload = async () => {
               403
             </span>
             <h2 className="my-2 font-heading text-2xl font-bold">
-              Hey {user.name}
+              Hey {user?.name ? user.name : 'there'}
             </h2>
             <p>
               Probably you are using a mobile view. Please switch to desktop for this page.

@@ -3,6 +3,7 @@ import React from 'react';
 import { Separator } from "@/components/ui/separator";
 import { useRouter } from 'next/navigation';
 import { jwtDecode } from "jwt-decode";
+
 export default function Page() {
   const router = useRouter();
 
@@ -10,16 +11,26 @@ export default function Page() {
     router.push(route); // Navigate to the specified route
   };
     
-    const token = sessionStorage.getItem('Token');
-    let user = null;
-  
-    if (token) {
-      try {
-        user = jwtDecode(token); // Decoding the token and storing user info
-      } catch (error) {
-        console.error('Invalid token:', error);
-      }
+  const token = sessionStorage.getItem('Token');
+  let user: { name: string } | null = null;
+
+  if (token) {
+    try {
+      user = jwtDecode(token); // Decoding the token and storing user info
+    } catch (error) {
+      console.error('Invalid token:', error);
+      router.push('/');
     }
+  } else {
+    // Redirect to login if no token
+    router.push('/');
+    return null;
+  }
+
+  // Return null while redirecting or if user is not authenticated
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className='text-foreground'>

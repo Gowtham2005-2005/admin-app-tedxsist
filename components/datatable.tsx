@@ -14,7 +14,6 @@ import {
 } from "@tanstack/react-table";
 import {
   AlertDialog,
-  AlertDialogTrigger,
   AlertDialogContent,
   AlertDialogHeader,
   AlertDialogFooter,

@@ -17,7 +17,7 @@ cloudinary.config({
 });
 
 // Function to generate Excel buffer
-function generateExcel(data: any): Buffer {
+function generateExcel(data: Record<string, unknown>[]): Buffer {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(data);
   XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
@@ -48,7 +48,6 @@ export async function POST(req: Request) {
 
     // Parse request JSON
     const data = await req.json();
-    console.log('Received Data:', data);
 
     // Generate Excel buffer
     const excelBuffer = generateExcel(data);
@@ -57,7 +56,6 @@ export async function POST(req: Request) {
     const tempDir = os.tmpdir(); // Get OS-specific temp directory
     const tempFilePath = path.join(tempDir, 'participants.xlsx');
     await writeFile(tempFilePath, excelBuffer);
-    console.log('Excel file written to:', tempFilePath);
 
     // Clear existing file before upload
     await clearExistingExcelFile();
@@ -73,7 +71,6 @@ export async function POST(req: Request) {
       unique_filename: false
     });
 
-    console.log('Upload successful:', uploadResult.secure_url);
 
     // Remove the temporary file
     await unlink(tempFilePath);
@@ -87,11 +84,8 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error('Error generating Excel file:', error);
     return NextResponse.json({
-      success: true,
-      url: uploadResult.secure_url, // This is the Cloudinary URL
-      message: 'Excel file generated successfully'
+      success: false,
+      message: 'Error generating Excel file'
     });
   }
 }
-
-

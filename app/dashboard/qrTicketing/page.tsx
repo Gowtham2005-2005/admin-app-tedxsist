@@ -8,6 +8,14 @@ import QRScanner from '@/components/QRScanner';
 import { useRouter } from 'next/navigation';
 import { jwtDecode } from 'jwt-decode';
 import { toast } from "sonner";
+
+interface AttendanceData {
+  name: string;
+  email: string;
+  timestamp: string;
+  status: string;
+}
+
 const ParentComponent = () => {
   const router = useRouter();
   const token = sessionStorage.getItem('Token');
@@ -15,7 +23,7 @@ const ParentComponent = () => {
   const [qrResult, setQrResult] = useState('None');
   const [qrResultTimestamp, setQrResultTimestamp] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [data, setData] = useState<any | null>(null); // Hold data from API response for display
+  const [data, setData] = useState<AttendanceData | null>(null); // Hold data from API response for display
   const [isAttendanceMarked, setIsAttendanceMarked] = useState(false); // Track if attendance is marked
 
   useEffect(() => {

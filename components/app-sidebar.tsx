@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import {jwtDecode} from "jwt-decode"
+import {jwtDecode, JwtPayload} from "jwt-decode"
 import {
   Ticket,
   Bot,
@@ -21,11 +21,17 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 
+interface UserPayload extends JwtPayload {
+  name?: string;
+  email?: string;
+  picture?: string;
+}
+
 const decodeToken = () => {
   const token = sessionStorage.getItem("Token");
   if (token) {
     try {
-      const decoded = jwtDecode(token); 
+      const decoded = jwtDecode<UserPayload>(token); 
       return {
         username: decoded.name || "Default Username",
         email: decoded.email || "Default Email",

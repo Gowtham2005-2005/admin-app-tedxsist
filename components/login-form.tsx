@@ -10,6 +10,8 @@ import {
 } from "firebase/auth";
 import { auth } from '@/firebase';
 
+const ALLOWED_ADMIN_EMAILS = process.env.NEXT_PUBLIC_ADMIN_EMAILS?.split(',') || [];
+
 export function LoginForm({
   className,
   ...props
@@ -30,6 +32,11 @@ export function LoginForm({
       const email = user.email || "";
       if (!email.endsWith("@gmail.com")) {
         setError("Please use your TEDxSIST email to sign in.");
+        return;
+      }
+
+      if (!ALLOWED_ADMIN_EMAILS.includes(email)) {
+        setError("Access denied. Please use an authorized admin email address.");
         return;
       }
 
