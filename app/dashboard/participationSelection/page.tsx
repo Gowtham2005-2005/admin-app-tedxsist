@@ -83,7 +83,7 @@ export default function ParticipationSelection() {
       const participantSnapshot = await getDocs(participantsCollection);
       const participantList = participantSnapshot.docs.map((doc) => ({
         ...doc.data(),
-        id: doc.data().id,
+        id: doc.id,
         selected: doc.data().selected || false, // Ensure "selected" field is fetched and initialized
       })) as Participant[];
       setParticipants(participantList);
