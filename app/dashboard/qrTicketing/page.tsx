@@ -13,6 +13,7 @@ interface AttendanceData {
   name: string;
   email: string;
   timestamp: string;
+  regno: string;
   status: string;
 }
 
@@ -144,6 +145,9 @@ const ParentComponent = () => {
                   </div>
                   <div>
                     <b>Name:</b> <span className="text-gray-600">{data?.name || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <b>Register no.:</b> <span className="text-gray-600">{data?.regno || 'N/A'}</span>
                   </div>
                   <div>
                     <b>Email:</b> <span className="text-gray-600">{data?.email || 'N/A'}</span>
