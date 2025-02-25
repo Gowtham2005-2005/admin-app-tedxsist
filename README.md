@@ -1,91 +1,37 @@
-# TEDxSIST Central-Admin-App
+# TEDxSIST Central-Admin-App  
 
-## Getting Started
+## Overview  
 
-To set up and run the development server, follow these steps:
+The **TEDxSIST Central-Admin-App** is a web-based administrative platform designed to streamline the management of TEDxSIST events. It provides tools for participant selection, automated email communication, QR code-based check-ins, and certificate generation.  
 
-1. Install dependencies:
+The app is fully deployed and accessible at:  
+🔗 [TEDxSIST Admin Panel](https://admin.tedxsist.com)  
 
-   ```bash
-   npm install
-   ```
+## Features  
 
-2. Start the development server:
+- **Participant Management** – Approve, reject, and view participant details.  
+- **Automated Email System** – Send bulk approval/rejection emails.  
+- **QR Code Check-In** – Scan and validate participant tickets.  
+- **Certificate Generation** – Secure and automated certificate distribution.  
+- **Google Drive Integration** – Store generated certificates efficiently.  
 
-   ```bash
-   npm run dev
-   ```
+## Security Considerations  
 
-3. Open [http://localhost:3000](http://localhost:3000) in your browser to view the app.  
-   Alternatively, you can use your IP address (IPv4) to test on other devices.
+- **Firebase Authentication** ensures only authorized users can access the admin panel.  
+- **Firestore Security Rules** restrict access based on user roles.  
+- **Flask REST API Security** includes authentication, rate limiting, and validation.  
+- **HTTPS Enforcement** ensures secure communication in production.  
 
----
+## Contributors  
 
-**Important Security Note:** 
-The Flask-based REST API (cert_gen) requires proper security measures:
-- Implement authentication to prevent unauthorized access
-- Add rate limiting to prevent abuse
-- Use HTTPS in production
-- Consider adding API keys or tokens
-- Validate all inputs to prevent injection attacks
+Meet the awesome contributors who made this project possible:  
 
-## Connect with Firebase
+<p align="left">
+  <a href="https://github.com/TEDxSIST-Central-Admin-App/graphs/contributors">
+    <img src="https://contrib.rocks/image?repo=TEDxSIST-Central-Admin-App" />
+  </a>
+</p>  
 
-Set up your Firebase environment by creating a `.env.local` file in the root directory and adding the following configuration:
-
-```env
-NEXT_PUBLIC_FIREBASE_API_KEY=<your-firebase-api-key>
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=<your-firebase-auth-domain>
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=<your-firebase-project-id>
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=<your-firebase-storage-bucket>
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=<your-firebase-messaging-sender-id>
-NEXT_PUBLIC_FIREBASE_APP_ID=<your-firebase-app-id>
-NEXT_PUBLIC_TEMP_DIR=./public/TEMP
-```
-
-Replace the placeholders (`<your-firebase-...>`) with your actual Firebase project configuration values.
-
----
-
-## To-Do List
-
-### 1. Bulk Email and Certificate Management
-
-- send bulk emails to participants.
-- Save certificates in the target Google Drive
-
-### 2. Scalability
-
-- Optimize the app to reduce unnecessary reads and writes to the Firebase database.
-
-### 3. Security Enhancements
-
-- Use **HTTP-only cookies** for session management instead of saving tokens in local or session storage, if necessary.
-
-### 4. Firebase Security Rules
-
-Update the Firestore security rules to ensure data protection. Use the following rules to restrict access:
-
-```json
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Match all documents in the database
-    match /{document=**} {
-      // Allow read access only for authenticated users
-      allow read: if request.auth != null;
-
-      // Allow write access only if the user is an admin
-      allow write: if request.auth != null && request.auth.token.admin == true;
-    }
-  }
-}
-```
-
-**Note:** These security rules are not currently implemented and will be added in future updates.
-
----
-
-**Note:** I have added flask based restapi, because javascript ain't generating certs properly.. (cert_gen) 
+## License  
 
 © TEDxSIST @tech_team
