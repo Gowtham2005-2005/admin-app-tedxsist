@@ -1,8 +1,8 @@
-# TEDxSIST Central-Admin-App  
+# TEDxSIST Admin-App  
 
 ## Overview  
 
-The **TEDxSIST Central-Admin-App** is a web-based administrative platform designed to streamline the management of TEDxSIST events. It provides tools for participant selection, automated email communication, QR code-based check-ins, and certificate generation.  
+The **TEDxSIST Admin-App** is a web-based administrative platform designed to streamline the management of TEDxSIST events. It provides tools for participant selection, automated email communication, QR code-based check-ins, and certificate generation.  
 
 The app is fully deployed and accessible at:  
 🔗 [TEDxSIST Admin Panel](https://admin.tedxsist.com)  
@@ -24,13 +24,15 @@ The app is fully deployed and accessible at:
 
 ## Contributors  
 
-Meet the awesome contributors who made this project possible:  
-
 <p align="left">
-  <a href="https://github.com/TEDxSIST-Central-Admin-App/graphs/contributors">
-    <img src="https://contrib.rocks/image?repo=TEDxSIST-Central-Admin-App" />
+  <a href="https://github.com/Gowtham2005-2005/admin-app-tedxsist/graphs/contributors">
+    <img src="https://contrib.rocks/image?repo=Gowtham2005-2005/admin-app-tedxsist" />
   </a>
 </p>  
+
+## Contribute  
+
+If you find any issues, please contribute to the repo. Our team will be very happy to learn new things and invite valid corrections!  
 
 ## License  
 
