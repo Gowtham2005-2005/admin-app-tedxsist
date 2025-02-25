@@ -26,7 +26,17 @@ The app is fully deployed and accessible at:
 
 [![GitHub Contributors](https://img.shields.io/github/contributors/Gowtham2005-2005/admin-app-tedxsist?color=blue)](https://github.com/Gowtham2005-2005/admin-app-tedxsist/graphs/contributors)  
 
-[Click here to view all contributors](https://github.com/Gowtham2005-2005/admin-app-tedxsist/graphs/contributors)  
+<p align="left">
+  <!-- Replace usernames with actual contributors -->
+  <a href="https://github.com/Gowtham2005-2005">
+    <img src="https://github.com/Gowtham2005-2005.png" width="50" height="50" />
+  </a>
+  <a href="https://github.com/hariaravind03">
+    <img src="https://github.com/hariaravind03.png" width="50" height="50" />
+  </a>
+</p>  
+
+[Click here to view all contributors](https://github.com/Gowtham2005-2005/admin-app-tedxsist/graphs/contributors).  
 
 ## Contribute  
 
