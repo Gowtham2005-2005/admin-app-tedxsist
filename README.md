@@ -26,15 +26,28 @@ The app is fully deployed and accessible at:
 
 [![GitHub Contributors](https://img.shields.io/github/contributors/Gowtham2005-2005/admin-app-tedxsist?color=blue)](https://github.com/Gowtham2005-2005/admin-app-tedxsist/graphs/contributors)  
 
-<p align="left">
-  <!-- Replace usernames with actual contributors -->
-  <a href="https://github.com/Gowtham2005-2005">
-    <img src="https://github.com/Gowtham2005-2005.png" width="50" height="50" />
-  </a>
-  <a href="https://github.com/hariaravind03">
-    <img src="https://github.com/hariaravind03.png" width="50" height="50" />
-  </a>
-</p>  
+<table>
+  <tr>
+    <td align="center">
+      <a href="https://github.com/Gowtham2005-2005">
+        <img src="https://github.com/Gowtham2005-2005.png?s=200" width="80" height="80" style="border-radius: 50%;" />
+        <br /><sub><b>Gowtham</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/hariaravind03">
+        <img src="https://github.com/hariaravind03.png?s=200" width="80" height="80" style="border-radius: 50%;" />
+        <br /><sub><b>Hari Aravind</b></sub>
+      </a>
+    </td>
+    <td align="center">
+      <a href="https://github.com/23f1001989">
+        <img src="https://github.com/23f1001989.png?s=200" width="80" height="80" style="border-radius: 50%;" />
+        <br /><sub><b>23f1001989</b></sub>
+      </a>
+    </td>
+  </tr>
+</table>  
 
 [Click here to view all contributors](https://github.com/Gowtham2005-2005/admin-app-tedxsist/graphs/contributors).  
 
