@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { doc, updateDoc, getDoc, setDoc, increment, onSnapshot } from "firebase/firestore";
+import { doc, increment, onSnapshot, writeBatch } from "firebase/firestore";
 import { db } from "@/firebase";
 import {
   ColumnDef,
@@ -58,36 +58,34 @@ export type Participant = {
   selected: boolean;
 };
 
-const updateParticipantSelection = async (participant: Participant) => {
+const updateParticipantSelections = async (participants: Participant[]) => {
   try {
-    const participantRef = doc(db, "participants", participant.id);
+    const batch = writeBatch(db);
     const selectedCounterRef = doc(db, "selected", "selected");
-
-    // First update the participant's selection status
-    await updateDoc(participantRef, {
-      selected: participant.selected,
-    });
-
-    // Get the current counter document
-    const selectedDoc = await getDoc(selectedCounterRef);
     
-    if (!selectedDoc.exists()) {
-      // Create the document if it doesn't exist, initialize with 1 or 0 based on selection
-      await setDoc(selectedCounterRef, { count: participant.selected ? 1 : 0 });
-    } else {
-      // Update the counter based on selection status
-      await updateDoc(selectedCounterRef, {
-        count: increment(participant.selected ? 1 : -1)
+    let delta = 0;
+
+    for (const participant of participants) {
+      const participantRef = doc(db, "participants", participant.id);
+      batch.update(participantRef, {
+        selected: participant.selected,
       });
+      delta += participant.selected ? 1 : -1;
     }
+
+    if (delta !== 0) {
+      batch.set(selectedCounterRef, { count: increment(delta) }, { merge: true });
+    }
+
+    await batch.commit();
   } catch (error) {
-    console.error("Error updating participant selection: ", error);
+    console.error("Error updating participant selections: ", error);
   }
 };
 
 type DataTableDemoProps = {
   participants: Participant[];
-  onSelectionChange: (updatedParticipant: Participant) => void;
+  onSelectionChange: (updatedParticipants: Participant[]) => void;
 };
 
 export const DataTableDemo = ({ participants: initialParticipants, onSelectionChange }: DataTableDemoProps) => {
@@ -95,7 +93,7 @@ export const DataTableDemo = ({ participants: initialParticipants, onSelectionCh
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
-  const [currentParticipant, setCurrentParticipant] = useState<Participant | null>(null);
+  const [bulkParticipants, setBulkParticipants] = useState<Participant[] | null>(null);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [selectedCount, setSelectedCount] = useState(0);
 
@@ -115,21 +113,21 @@ export const DataTableDemo = ({ participants: initialParticipants, onSelectionCh
   }, []);
 
   const handleCheckboxChange = (participant: Participant, newValue: boolean) => {
-  setCurrentParticipant({ ...participant, selected: newValue });
+  setBulkParticipants([{ ...participant, selected: newValue }]);
   setConfirmDialogOpen(true);
 };
 
 const confirmSelectionUpdate = async () => {
-  if (currentParticipant) {
+  if (bulkParticipants && bulkParticipants.length > 0) {
     // Update Firestore
-    await updateParticipantSelection(currentParticipant);
+    await updateParticipantSelections(bulkParticipants);
 
     // Notify parent to update local state
-    onSelectionChange(currentParticipant);
+    onSelectionChange(bulkParticipants);
 
     // Close dialog
     setConfirmDialogOpen(false);
-    setCurrentParticipant(null);
+    setBulkParticipants(null);
   }
 };
 
@@ -142,7 +140,16 @@ const confirmSelectionUpdate = async () => {
           table.getIsAllPageRowsSelected() ||
           (table.getIsSomePageRowsSelected() && "indeterminate")
         }
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        onCheckedChange={(value) => {
+          const isSelected = !!value;
+          table.toggleAllPageRowsSelected(isSelected);
+          const rows = table.getRowModel().rows;
+          if (rows.length > 0) {
+            const updated = rows.map(row => ({ ...row.original, selected: isSelected }));
+            setBulkParticipants(updated);
+            setConfirmDialogOpen(true);
+          }
+        }}
         aria-label="Select all"
       />
     ),
@@ -158,14 +165,37 @@ const confirmSelectionUpdate = async () => {
           />
 
           {/* AlertDialog for confirmation */}
-          {currentParticipant?.id === participant.id && (
+          {bulkParticipants && bulkParticipants.length === 1 && bulkParticipants[0].id === participant.id && (
             <AlertDialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>{currentParticipant.selected ? "Confirm Selection" : "Ditch This Person"}</AlertDialogTitle>
+                  <AlertDialogTitle>{bulkParticipants[0].selected ? "Confirm Selection" : "Ditch This Person"}</AlertDialogTitle>
                   <AlertDialogDescription>
                     Are you sure you want to mark this participant as{" "}
-                    {currentParticipant.selected ? "selected" : "not selected"}?
+                    {bulkParticipants[0].selected ? "selected" : "not selected"}?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <Button variant="outline" onClick={() => setConfirmDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={confirmSelectionUpdate}>
+                    Confirm
+                  </Button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+
+          {/* AlertDialog for bulk confirmation (renders only on first row to avoid duplicates if bulk) */}
+          {bulkParticipants && bulkParticipants.length > 1 && row.index === 0 && (
+            <AlertDialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirm Bulk {bulkParticipants[0].selected ? "Selection" : "Rejection"}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to mark {bulkParticipants.length} participants as{" "}
+                    {bulkParticipants[0].selected ? "selected" : "not selected"}?
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

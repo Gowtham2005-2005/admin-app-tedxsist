@@ -233,12 +233,16 @@ const handledownload = async () => {
   setIsSheetOpen(false); // Close the sheet
 };
 
-  const handleSelectionChange = (updatedParticipant: Participant) => {
+  const handleSelectionChange = (updatedParticipants: Participant[]) => {
     // Update the participant in the state (or Firebase)
     setParticipants(prevParticipants => {
-      const newParticipants = prevParticipants.map(p =>
-        p.id === updatedParticipant.id ? updatedParticipant : p
-      );
+      const newParticipants = [...prevParticipants];
+      updatedParticipants.forEach(up => {
+         const index = newParticipants.findIndex(p => p.id === up.id);
+         if (index !== -1) {
+             newParticipants[index] = up;
+         }
+      });
       sessionStorage.setItem("cached_participants", JSON.stringify(newParticipants));
       return newParticipants;
     });

@@ -266,13 +266,13 @@ function buildSelectionEmail({
               style="background:linear-gradient(135deg,#E62B1E22 0%,#E62B1E11 100%);border:1.5px solid #E62B1E55;border-radius:16px;">
               <tr>
                 <td align="center" style="padding:28px 24px;">
-                  <p style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:2px;color:#E62B1E;font-weight:700;">
+                  <p style="margin:0 0 8px;font-size:14px;text-transform:uppercase;letter-spacing:2px;color:#E62B1E;font-weight:700;">
                     ⏰ Your Arrival Slot
                   </p>
-                  <p style="margin:0;font-size:36px;font-weight:900;color:#ffffff;letter-spacing:1px;">
+                  <p style="margin:0;font-size:24px;font-weight:900;color:#ffffff;letter-spacing:1px;">
                     ${slotLabel}
                   </p>
-                  <p style="margin:12px 0 0;font-size:13px;color:#aaaaaa;line-height:1.5;">
+                  <p style="margin:12px 0 0;font-size:14px;color:#aaaaaa;line-height:1.5;">
                     Please arrive <strong style="color:#ffffff;">within your assigned slot</strong> to ensure a smooth entry.<br/>
                     Entry outside your slot may not be permitted.
                   </p>
@@ -314,7 +314,10 @@ function buildSelectionEmail({
                 <td style="padding:20px 24px;">
                   <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:#ffffff;">📋 Important Instructions</p>
                   <ul style="margin:0;padding:0 0 0 18px;color:#aaaaaa;font-size:13px;line-height:1.8;">
-                    <li>Arrive within your designated time slot</li>
+                    <li>Report as per your alloted slot. Failing to do so, the attendee will be made to wait till 10:00 am</li>
+                    <li>Follow college dress code</li>
+                    <li>OD will not be provided from our end. Kindly follow your department procedure.</li>
+                    <li>Attendees leaving before the completion of the event will not be given attendance.</li>
                   </ul>
                 </td>
               </tr>
