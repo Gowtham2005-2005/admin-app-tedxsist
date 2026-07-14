@@ -63,64 +63,84 @@ export const POST = async (request: Request) => {
 
     const predefinedSubject = subject || `🎉 You're Selected for ${eventName}!`;
 
-    // ── Send per-recipient ────────────────────────────────────────────────
-    const sendEmailPromises = to.map(async (email, index) => {
-      const username = usernames[index];
-      const participantId = participantIds[index];
-      const slotLabel = assignedSlots[index];
+    // ── Send per-recipient in batches ───────────────────────────────────────
+    const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+    const BATCH_SIZE = 5;
+    const results: any[] = [];
 
-      try {
-        // Skip if already sent
-        const participantRef = doc(db, "participants", participantId);
-        const participantSnap = await getDoc(participantRef);
+    for (let i = 0; i < to.length; i += BATCH_SIZE) {
+      const batchTo = to.slice(i, i + BATCH_SIZE);
+      const batchUsernames = usernames.slice(i, i + BATCH_SIZE);
+      const batchParticipantIds = participantIds.slice(i, i + BATCH_SIZE);
+      const batchSlots = assignedSlots.slice(i, i + BATCH_SIZE);
 
-        if (participantSnap.exists() && participantSnap.data().selection_email_sent) {
-          console.log(`Email already sent to ${email}, skipping.`);
-          return { status: 'skipped', email };
+      console.log(`Processing email batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(to.length / BATCH_SIZE)}...`);
+
+      const batchPromises = batchTo.map(async (email, index) => {
+        const username = batchUsernames[index];
+        const participantId = batchParticipantIds[index];
+        const slotLabel = batchSlots[index];
+
+        try {
+          // Skip if already sent
+          const participantRef = doc(db, "participants", participantId);
+          const participantSnap = await getDoc(participantRef);
+
+          if (participantSnap.exists() && participantSnap.data().selection_email_sent) {
+            console.log(`Email already sent to ${email}, skipping.`);
+            return { status: 'skipped', email };
+          }
+
+          // Generate local QR with participantId|slotLabel encoded
+          const qrCodeDataUrl = await generateQRCodeDataUrl(participantId, slotLabel);
+          const cid = `qr_${participantId}@tedxsist.com`;
+
+          const html = buildSelectionEmail({
+            username,
+            eventName,
+            eventDate,
+            eventVenue,
+            slotLabel,
+            qrCodeUrl: `cid:${cid}`,
+          });
+
+          await transporter.sendMail({
+            from: `"TEDxSIST" <${fromEmail}>`,
+            to: email,
+            subject: predefinedSubject,
+            html,
+            attachments: [
+              {
+                filename: 'entry-qrcode.png',
+                path: qrCodeDataUrl,
+                cid: cid
+              }
+            ]
+          });
+
+          // Log to Firestore
+          await updateDoc(participantRef, {
+            selection_email_sent: true,
+            assigned_slot: slotLabel,
+            email_sent_at: new Date().toISOString(),
+          });
+
+          return { status: 'sent', email };
+        } catch (error) {
+          console.error(`Error sending email to ${email}:`, error);
+          throw error;
         }
+      });
 
-        // Generate local QR with participantId|slotLabel encoded
-        const qrCodeDataUrl = await generateQRCodeDataUrl(participantId, slotLabel);
-        const cid = `qr_${participantId}@tedxsist.com`;
+      const batchResults = await Promise.allSettled(batchPromises);
+      results.push(...batchResults);
 
-        const html = buildSelectionEmail({
-          username,
-          eventName,
-          eventDate,
-          eventVenue,
-          slotLabel,
-          qrCodeUrl: `cid:${cid}`,
-        });
-
-        await transporter.sendMail({
-          from: `"TEDxSIST" <${fromEmail}>`,
-          to: email,
-          subject: predefinedSubject,
-          html,
-          attachments: [
-            {
-              filename: 'entry-qrcode.png',
-              path: qrCodeDataUrl,
-              cid: cid
-            }
-          ]
-        });
-
-        // Log to Firestore
-        await updateDoc(participantRef, {
-          selection_email_sent: true,
-          assigned_slot: slotLabel,
-          email_sent_at: new Date().toISOString(),
-        });
-
-        return { status: 'sent', email };
-      } catch (error) {
-        console.error(`Error sending email to ${email}:`, error);
-        throw error;
+      // Add a 4-second delay between batches to respect Gmail SMTP rate limits
+      if (i + BATCH_SIZE < to.length) {
+        await delay(4000);
       }
-    });
+    }
 
-    const results = await Promise.allSettled(sendEmailPromises);
     const successCount = results.filter(r => r.status === 'fulfilled').length;
     const failureCount = results.length - successCount;
 

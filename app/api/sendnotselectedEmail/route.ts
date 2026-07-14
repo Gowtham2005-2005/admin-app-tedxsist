@@ -45,44 +45,63 @@ export const POST = async (request: Request) => {
 
     const predefinedSubject = `Update on your TEDxSIST 2026 Registration`;
 
-    // ── Send per-recipient ────────────────────────────────────────────────
-    const sendEmailPromises = to.map(async (email, index) => {
-      const username = usernames[index];
-      const participantId = participantIds[index];
+    // ── Send per-recipient in batches ───────────────────────────────────────
+    const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+    const BATCH_SIZE = 5;
+    const results: any[] = [];
 
-      try {
-        // Skip if already sent
-        const participantRef = doc(db, "participants", participantId);
-        const participantSnap = await getDoc(participantRef);
+    for (let i = 0; i < to.length; i += BATCH_SIZE) {
+      const batchTo = to.slice(i, i + BATCH_SIZE);
+      const batchUsernames = usernames.slice(i, i + BATCH_SIZE);
+      const batchParticipantIds = participantIds.slice(i, i + BATCH_SIZE);
 
-        if (participantSnap.exists() && participantSnap.data().rejection_email_sent) {
-          console.log(`Rejection email already sent to ${email}, skipping.`);
-          return { status: 'skipped', email };
+      console.log(`Processing rejection email batch ${Math.floor(i / BATCH_SIZE) + 1} of ${Math.ceil(to.length / BATCH_SIZE)}...`);
+
+      const batchPromises = batchTo.map(async (email, index) => {
+        const username = batchUsernames[index];
+        const participantId = batchParticipantIds[index];
+
+        try {
+          // Skip if already sent
+          const participantRef = doc(db, "participants", participantId);
+          const participantSnap = await getDoc(participantRef);
+
+          if (participantSnap.exists() && participantSnap.data().rejection_email_sent) {
+            console.log(`Rejection email already sent to ${email}, skipping.`);
+            return { status: 'skipped', email };
+          }
+
+          const html = buildRejectionEmail({ username });
+
+          await transporter.sendMail({
+            from: `"TEDxSIST" <${fromEmail}>`,
+            to: email,
+            subject: predefinedSubject,
+            html,
+          });
+
+          // Log to Firestore
+          await updateDoc(participantRef, {
+            rejection_email_sent: true,
+            email_sent_at: new Date().toISOString(),
+          });
+
+          return { status: 'sent', email };
+        } catch (error) {
+          console.error(`Error sending rejection email to ${email}:`, error);
+          throw error;
         }
+      });
 
-        const html = buildRejectionEmail({ username });
+      const batchResults = await Promise.allSettled(batchPromises);
+      results.push(...batchResults);
 
-        await transporter.sendMail({
-          from: `"TEDxSIST" <${fromEmail}>`,
-          to: email,
-          subject: predefinedSubject,
-          html,
-        });
-
-        // Log to Firestore
-        await updateDoc(participantRef, {
-          rejection_email_sent: true,
-          email_sent_at: new Date().toISOString(),
-        });
-
-        return { status: 'sent', email };
-      } catch (error) {
-        console.error(`Error sending email to ${email}:`, error);
-        throw error;
+      // Add a 4-second delay between batches to respect Gmail SMTP rate limits
+      if (i + BATCH_SIZE < to.length) {
+        await delay(4000);
       }
-    });
+    }
 
-    const results = await Promise.allSettled(sendEmailPromises);
     const successCount = results.filter(r => r.status === 'fulfilled').length;
     const failureCount = results.length - successCount;
 
