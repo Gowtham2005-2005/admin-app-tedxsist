@@ -3,10 +3,11 @@
 import * as React from "react"
 import {jwtDecode, JwtPayload} from "jwt-decode"
 import {
-  Ticket,
   Bot,
   GalleryVerticalEnd,
   Users,
+  ScanLine,
+  Settings2,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -75,19 +76,22 @@ const data = {
       isActive: true,
       
     },
-    {
-      title: "QR Ticketing",
-      url: "/dashboard/qrTicketing",
-      icon: Ticket,
-     
-    },
+
     {
       title: "Certificate Generation",
       url: "/dashboard/certificateGeneration",
       icon: Bot,
-      
     },
-    
+    {
+      title: "Slot Configuration",
+      url: "/dashboard/slots",
+      icon: Settings2,
+    },
+    {
+      title: "Entry Scanner",
+      url: "/dashboard/scanner",
+      icon: ScanLine,
+    },
   ]
   
 }

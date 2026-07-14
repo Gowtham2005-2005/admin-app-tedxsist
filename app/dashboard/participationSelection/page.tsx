@@ -79,6 +79,12 @@ export default function ParticipationSelection() {
 
   useEffect(() => {
     const fetchParticipants = async () => {
+      const cachedData = sessionStorage.getItem("cached_participants");
+      if (cachedData) {
+        setParticipants(JSON.parse(cachedData));
+        return;
+      }
+
       const participantsCollection = collection(db, "participants");
       const participantSnapshot = await getDocs(participantsCollection);
       const participantList = participantSnapshot.docs.map((doc) => ({
@@ -86,7 +92,9 @@ export default function ParticipationSelection() {
         id: doc.id,
         selected: doc.data().selected || false, // Ensure "selected" field is fetched and initialized
       })) as Participant[];
+      
       setParticipants(participantList);
+      sessionStorage.setItem("cached_participants", JSON.stringify(participantList));
     };
     fetchParticipants();
   }, []);
@@ -227,11 +235,13 @@ const handledownload = async () => {
 
   const handleSelectionChange = (updatedParticipant: Participant) => {
     // Update the participant in the state (or Firebase)
-    setParticipants(prevParticipants =>
-      prevParticipants.map(p =>
+    setParticipants(prevParticipants => {
+      const newParticipants = prevParticipants.map(p =>
         p.id === updatedParticipant.id ? updatedParticipant : p
-      )
-    );
+      );
+      sessionStorage.setItem("cached_participants", JSON.stringify(newParticipants));
+      return newParticipants;
+    });
   };
 
 

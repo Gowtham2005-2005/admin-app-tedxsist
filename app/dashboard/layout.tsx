@@ -35,8 +35,7 @@ export default function RootLayout({
   return (
     <ClientRootLayout>
       <main
-        lang="en"
-        className={`min-h-screen w-full bg-white text-black flex dark ${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`min-h-screen w-full bg-background text-foreground flex dark ${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <SidebarProvider>
           <AppSidebar />
