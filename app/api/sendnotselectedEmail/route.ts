@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
-import { SESClient, SendRawEmailCommand } from "@aws-sdk/client-ses";
 import { db } from '@/firebase';
 import { doc, updateDoc, getDoc } from "firebase/firestore";
 import 'dotenv/config';
@@ -20,27 +19,28 @@ export const POST = async (request: Request) => {
       return NextResponse.json({ message: 'Participant IDs list does not match recipient list' }, { status: 400 });
     }
 
-    // ── AWS SES transporter ───────────────────────────────────────────────
-    const awsRegion = process.env.AWS_REGION || 'us-east-1';
-    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+    // ── SMTP transporter ───────────────────────────────────────────────
     const fromEmail = process.env.EMAIL_USER;
+    const emailPass = process.env.EMAIL_PASS;
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = parseInt(process.env.SMTP_PORT || '587');
 
-    if (!accessKeyId || !secretAccessKey || !fromEmail) {
-      console.error('Missing AWS SES credentials or EMAIL_USER');
+    if (!fromEmail || !emailPass) {
+      console.error('Missing EMAIL_USER or EMAIL_PASS');
       return NextResponse.json(
-        { message: 'Server misconfiguration: Missing AWS credentials' },
+        { message: 'Server misconfiguration: Missing email credentials' },
         { status: 500 }
       );
     }
 
-    const ses = new SESClient({
-      region: awsRegion,
-      credentials: { accessKeyId, secretAccessKey }
-    });
-
     const transporter = nodemailer.createTransport({
-      SES: { ses, aws: { SendRawEmailCommand } }
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465, // true for 465, false for other ports
+      auth: {
+        user: fromEmail,
+        pass: emailPass,
+      },
     });
 
     const predefinedSubject = `Update on your TEDxSIST 2026 Registration`;
