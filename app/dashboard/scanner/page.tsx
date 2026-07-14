@@ -8,6 +8,7 @@ import { CheckCircle2, XCircle, ScanLine, Clock, User, RefreshCw, QrCode } from 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { Camera, CameraOff } from 'lucide-react';
 
 interface UserPayload extends JwtPayload { name: string; email: string; }
 
@@ -39,6 +40,7 @@ export default function ScannerPage() {
   const [slots, setSlots] = useState<{ label: string; startTime: string; endTime: string }[]>([]);
   const [currentSlot, setCurrentSlot] = useState<string | null>(null);
   const [scanHistory, setScanHistory] = useState<{ id: string; name: string; slot: string; time: string; valid: boolean }[]>([]);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Auth guard
@@ -74,8 +76,47 @@ export default function ScannerPage() {
 
   // Auto-focus input
   useEffect(() => {
-    inputRef.current?.focus();
-  }, [scanResult]);
+    if (!cameraEnabled) {
+      inputRef.current?.focus();
+    }
+  }, [scanResult, cameraEnabled]);
+
+  // Camera Scanner
+  useEffect(() => {
+    if (!cameraEnabled) return;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let scanner: any = null;
+    const initScanner = async () => {
+      const { Html5QrcodeScanner } = await import('html5-qrcode');
+      scanner = new Html5QrcodeScanner("qr-reader", { 
+        qrbox: { width: 250, height: 250 }, 
+        fps: 5,
+        rememberLastUsedCamera: true
+      }, false);
+      
+      scanner.render((decodedText: string) => {
+        // Pause scanning momentarily after a read
+        if (scanner.getState() === 2) scanner.pause(true); 
+        validateQR(decodedText).finally(() => {
+          setTimeout(() => {
+            if (scanner.getState() === 3) scanner.resume();
+          }, 3000);
+        });
+      }, () => {
+        // ignore continuous scan errors
+      });
+    };
+
+    initScanner();
+
+    return () => {
+      if (scanner) {
+        scanner.clear().catch(console.error);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraEnabled]);
 
   const validateQR = async (rawData: string) => {
     const trimmed = rawData.trim();
@@ -239,10 +280,27 @@ export default function ScannerPage() {
         {/* Scanner Input */}
         <div className="space-y-5">
           <div className="bg-muted/10 border rounded-xl p-6 space-y-4">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
-              <QrCode className="w-4 h-4" />
-              Scan or paste QR code data
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
+                <QrCode className="w-4 h-4" />
+                Scan or paste QR code data
+              </div>
+              <Button 
+                variant={cameraEnabled ? "default" : "outline"}
+                size="sm"
+                onClick={() => setCameraEnabled(!cameraEnabled)}
+                className="gap-2"
+              >
+                {cameraEnabled ? <CameraOff className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
+                {cameraEnabled ? "Disable Camera" : "Enable Camera"}
+              </Button>
             </div>
+
+            {cameraEnabled && (
+              <div className="overflow-hidden rounded-lg border bg-black/5">
+                <div id="qr-reader" className="w-full"></div>
+              </div>
+            )}
 
             <div className="relative">
               <Input
