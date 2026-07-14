@@ -83,6 +83,7 @@ export const POST = async (request: Request) => {
           // Log to Firestore
           await updateDoc(participantRef, {
             rejection_email_sent: true,
+            emailsent: true,
             email_sent_at: new Date().toISOString(),
           });
 

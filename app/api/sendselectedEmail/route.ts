@@ -121,6 +121,7 @@ export const POST = async (request: Request) => {
           // Log to Firestore
           await updateDoc(participantRef, {
             selection_email_sent: true,
+            emailsent: true,
             assigned_slot: slotLabel,
             email_sent_at: new Date().toISOString(),
           });
