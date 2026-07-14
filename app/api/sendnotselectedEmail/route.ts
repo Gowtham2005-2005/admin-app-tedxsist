@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
-import { db } from '@/firebase';
-import { doc, updateDoc, getDoc } from "firebase/firestore";
+import { adminDb } from '@/firebase-server';
 import 'dotenv/config';
 
 export const POST = async (request: Request) => {
@@ -63,10 +62,10 @@ export const POST = async (request: Request) => {
 
         try {
           // Skip if already sent
-          const participantRef = doc(db, "participants", participantId);
-          const participantSnap = await getDoc(participantRef);
+          const participantRef = adminDb.collection('participants').doc(participantId);
+          const participantSnap = await participantRef.get();
 
-          if (participantSnap.exists() && participantSnap.data().rejection_email_sent) {
+          if (participantSnap.exists && participantSnap.data()?.rejection_email_sent) {
             console.log(`Rejection email already sent to ${email}, skipping.`);
             return { status: 'skipped', email };
           }
@@ -81,7 +80,7 @@ export const POST = async (request: Request) => {
           });
 
           // Log to Firestore
-          await updateDoc(participantRef, {
+          await participantRef.update({
             rejection_email_sent: true,
             emailsent: true,
             email_sent_at: new Date().toISOString(),

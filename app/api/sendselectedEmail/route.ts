@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { generateQRCodeDataUrl } from '@/lib/qrcode';
-import { db } from '@/firebase';
-import { doc, updateDoc, getDoc } from "firebase/firestore";
+import { adminDb } from '@/firebase-server';
 import { assignSlots, DEFAULT_SLOT_CONFIG, SlotConfig } from '@/lib/slots';
 import 'dotenv/config';
 
@@ -24,9 +23,9 @@ export const POST = async (request: Request) => {
     // ── Fetch slot config from Firestore ──────────────────────────────────
     let slotConfig: SlotConfig = DEFAULT_SLOT_CONFIG;
     try {
-      const configRef = doc(db, 'config', 'slotConfig');
-      const configSnap = await getDoc(configRef);
-      if (configSnap.exists()) {
+      const configRef = adminDb.collection('config').doc('slotConfig');
+      const configSnap = await configRef.get();
+      if (configSnap.exists) {
         slotConfig = configSnap.data() as SlotConfig;
       }
     } catch (e) {
@@ -83,10 +82,10 @@ export const POST = async (request: Request) => {
 
         try {
           // Skip if already sent
-          const participantRef = doc(db, "participants", participantId);
-          const participantSnap = await getDoc(participantRef);
+          const participantRef = adminDb.collection('participants').doc(participantId);
+          const participantSnap = await participantRef.get();
 
-          if (participantSnap.exists() && participantSnap.data().selection_email_sent) {
+          if (participantSnap.exists && participantSnap.data()?.selection_email_sent) {
             console.log(`Email already sent to ${email}, skipping.`);
             return { status: 'skipped', email };
           }
@@ -119,7 +118,7 @@ export const POST = async (request: Request) => {
           });
 
           // Log to Firestore
-          await updateDoc(participantRef, {
+          await participantRef.update({
             selection_email_sent: true,
             emailsent: true,
             assigned_slot: slotLabel,
