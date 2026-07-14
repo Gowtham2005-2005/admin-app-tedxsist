@@ -1,14 +1,13 @@
 'use client';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { db } from '@/firebase';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { CheckCircle2, XCircle, ScanLine, Clock, User, RefreshCw, QrCode } from 'lucide-react';
+import { CheckCircle2, XCircle, ScanLine, Clock, User, RefreshCw, QrCode, Camera, CameraOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
-import { Camera, CameraOff } from 'lucide-react';
 
 interface UserPayload extends JwtPayload { name: string; email: string; }
 
@@ -23,7 +22,13 @@ interface ScanResult {
   message: string;
 }
 
-function getCurrentSlotLabel(slots: { label: string; startTime: string; endTime: string }[]): string | null {
+interface SlotConfig {
+  label: string;
+  startTime: string;
+  endTime: string;
+}
+
+function getCurrentSlotLabel(slots: SlotConfig[]): string | null {
   const now = new Date();
   const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   for (const slot of slots) {
@@ -37,11 +42,20 @@ export default function ScannerPage() {
   const [qrInput, setQrInput] = useState('');
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [scanning, setScanning] = useState(false);
-  const [slots, setSlots] = useState<{ label: string; startTime: string; endTime: string }[]>([]);
+  const [slots, setSlots] = useState<SlotConfig[]>([]);
   const [currentSlot, setCurrentSlot] = useState<string | null>(null);
   const [scanHistory, setScanHistory] = useState<{ id: string; name: string; slot: string; time: string; valid: boolean }[]>([]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
+
   const inputRef = useRef<HTMLInputElement>(null);
+  const slotsRef = useRef<SlotConfig[]>([]);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const html5QrcodeRef = useRef<any>(null);
+  const isScanningRef = useRef(false); // debounce camera double-reads
+
+  // Keep slotsRef in sync so camera callback always has latest slots
+  useEffect(() => { slotsRef.current = slots; }, [slots]);
 
   // Auth guard
   useEffect(() => {
@@ -68,68 +82,32 @@ export default function ScannerPage() {
 
   // Tick clock for current slot
   useEffect(() => {
-    const tick = () => setCurrentSlot(getCurrentSlotLabel(slots));
+    const tick = () => setCurrentSlot(getCurrentSlotLabel(slotsRef.current));
     tick();
     const timer = setInterval(tick, 30000);
     return () => clearInterval(timer);
-  }, [slots]);
+  }, []);
 
-  // Auto-focus input
+  // Auto-focus input when camera is off
   useEffect(() => {
-    if (!cameraEnabled) {
-      inputRef.current?.focus();
-    }
+    if (!cameraEnabled) inputRef.current?.focus();
   }, [scanResult, cameraEnabled]);
 
-  // Camera Scanner
-  useEffect(() => {
-    if (!cameraEnabled) return;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let scanner: any = null;
-    const initScanner = async () => {
-      const { Html5QrcodeScanner } = await import('html5-qrcode');
-      scanner = new Html5QrcodeScanner("qr-reader", { 
-        qrbox: { width: 250, height: 250 }, 
-        fps: 5,
-        rememberLastUsedCamera: true
-      }, false);
-      
-      scanner.render((decodedText: string) => {
-        // Pause scanning momentarily after a read
-        if (scanner.getState() === 2) scanner.pause(true); 
-        validateQR(decodedText).finally(() => {
-          setTimeout(() => {
-            if (scanner.getState() === 3) scanner.resume();
-          }, 3000);
-        });
-      }, () => {
-        // ignore continuous scan errors
-      });
-    };
-
-    initScanner();
-
-    return () => {
-      if (scanner) {
-        scanner.clear().catch(console.error);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraEnabled]);
-
-  const validateQR = async (rawData: string) => {
+  // ── Core QR validation logic ──────────────────────────────────────────────
+  const validateQR = useCallback(async (rawData: string) => {
     const trimmed = rawData.trim();
     if (!trimmed) return;
+    if (isScanningRef.current) return; // debounce
+    isScanningRef.current = true;
 
     setScanning(true);
     setScanResult(null);
 
     try {
-      // QR encodes: "participantId|slotLabel"
+      // QR payload format: "participantId|slotLabel"
       const parts = trimmed.split('|');
       const participantId = parts[0];
-      const qrSlot = parts.slice(1).join('|') || null; // handles labels with "–"
+      const qrSlot = parts.slice(1).join('|') || null; // handles "09:00 – 09:15" style labels
 
       const participantRef = doc(db, 'participants', participantId);
       const snap = await getDoc(participantRef);
@@ -138,20 +116,15 @@ export default function ScannerPage() {
       const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 
       if (!snap.exists()) {
-        const result: ScanResult = {
-          status: 'invalid',
-          message: 'Participant not found. QR code may be invalid.',
-          currentTime: timeStr,
-        };
-        setScanResult(result);
-        setScanning(false);
+        setScanResult({ status: 'invalid', message: 'Participant not found. QR code may be invalid.', currentTime: timeStr });
+        setScanHistory(prev => [{ id: trimmed, name: 'Unknown', slot: 'N/A', time: timeStr, valid: false }, ...prev.slice(0, 19)]);
         return;
       }
 
       const data = snap.data();
 
       if (data.entry_scanned) {
-        const result: ScanResult = {
+        setScanResult({
           status: 'already_used',
           participantId,
           name: data.name,
@@ -159,21 +132,19 @@ export default function ScannerPage() {
           regno: data.regno,
           slot: data.assigned_slot ?? qrSlot ?? 'N/A',
           currentTime: timeStr,
-          message: `Already checked in at ${data.scanned_at ?? 'earlier'}.`,
-        };
-        setScanResult(result);
-        setScanning(false);
+          message: `Already checked in at ${data.scanned_at ? new Date(data.scanned_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'earlier'}.`,
+        });
+        setScanHistory(prev => [{ id: participantId, name: data.name, slot: data.assigned_slot ?? 'N/A', time: timeStr, valid: false }, ...prev.slice(0, 19)]);
         return;
       }
 
-      // Check slot if available (allow early arrival, reject late arrival)
+      // Check late arrival — use slotsRef to always get latest
       if (qrSlot) {
-        const assignedSlotConfig = slots.find(s => s.label === qrSlot);
+        const assignedSlotConfig = slotsRef.current.find(s => s.label === qrSlot);
         if (assignedSlotConfig) {
           const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-          
           if (hhmm > assignedSlotConfig.endTime) {
-            const result: ScanResult = {
+            setScanResult({
               status: 'wrong_slot',
               participantId,
               name: data.name,
@@ -181,20 +152,16 @@ export default function ScannerPage() {
               regno: data.regno,
               slot: qrSlot,
               currentTime: timeStr,
-              message: `Late arrival! Participant assigned to ${qrSlot}. Entry denied after ${assignedSlotConfig.endTime}.`,
-            };
-            setScanResult(result);
-            setScanning(false);
+              message: `Late arrival! Assigned to ${qrSlot}. Entry denied after ${assignedSlotConfig.endTime}.`,
+            });
+            setScanHistory(prev => [{ id: participantId, name: data.name, slot: qrSlot, time: timeStr, valid: false }, ...prev.slice(0, 19)]);
             return;
           }
         }
       }
 
-      // ✅ Valid — check them in
-      await updateDoc(participantRef, {
-        entry_scanned: true,
-        scanned_at: now.toISOString(),
-      });
+      // ✅ Valid — mark entry
+      await updateDoc(participantRef, { entry_scanned: true, scanned_at: now.toISOString() });
 
       const result: ScanResult = {
         status: 'valid',
@@ -207,55 +174,83 @@ export default function ScannerPage() {
         message: 'Entry approved! Welcome to TEDxSIST.',
       };
       setScanResult(result);
+      setScanHistory(prev => [{ id: participantId, name: data.name, slot: result.slot!, time: timeStr, valid: true }, ...prev.slice(0, 19)]);
 
-      setScanHistory(prev => [
-        { id: participantId, name: data.name, slot: result.slot!, time: timeStr, valid: true },
-        ...prev.slice(0, 19),
-      ]);
     } catch (e) {
       console.error('Scan error:', e);
       toast.error('Error validating QR code.');
     } finally {
       setScanning(false);
       setQrInput('');
+      // Allow next scan after 3 seconds
+      setTimeout(() => { isScanningRef.current = false; }, 3000);
     }
-  };
+  }, []);
+
+  // ── Camera start/stop ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!cameraEnabled) {
+      // Stop camera if running
+      if (html5QrcodeRef.current) {
+        html5QrcodeRef.current.stop()
+          .then(() => html5QrcodeRef.current.clear())
+          .catch(console.error);
+        html5QrcodeRef.current = null;
+      }
+      return;
+    }
+
+    setCameraLoading(true);
+    let cancelled = false;
+
+    const startCamera = async () => {
+      try {
+        const { Html5Qrcode } = await import('html5-qrcode');
+        if (cancelled) return;
+
+        const qr = new Html5Qrcode('qr-camera-region');
+        html5QrcodeRef.current = qr;
+
+        await qr.start(
+          { facingMode: 'environment' }, // use rear camera on phones
+          { fps: 5, qrbox: { width: 250, height: 250 } },
+          (decodedText) => {
+            validateQR(decodedText);
+          },
+          () => { /* ignore scan errors */ }
+        );
+      } catch (err) {
+        console.error('Camera start failed:', err);
+        toast.error('Could not access camera. Please allow camera permission and try again.');
+        if (!cancelled) setCameraEnabled(false);
+      } finally {
+        if (!cancelled) setCameraLoading(false);
+      }
+    };
+
+    startCamera();
+
+    return () => {
+      cancelled = true;
+      if (html5QrcodeRef.current) {
+        html5QrcodeRef.current.stop()
+          .then(() => html5QrcodeRef.current?.clear())
+          .catch(console.error);
+        html5QrcodeRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraEnabled]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      validateQR(qrInput);
-    }
+    if (e.key === 'Enter') validateQR(qrInput);
   };
 
   const statusConfig = {
-    valid: {
-      icon: CheckCircle2,
-      bg: 'bg-green-500/10 border-green-500/30',
-      text: 'text-green-400',
-      iconColor: 'text-green-400',
-      label: '✅ ENTRY APPROVED',
-    },
-    invalid: {
-      icon: XCircle,
-      bg: 'bg-red-500/10 border-red-500/30',
-      text: 'text-red-400',
-      iconColor: 'text-red-400',
-      label: '❌ INVALID QR',
-    },
-    already_used: {
-      icon: XCircle,
-      bg: 'bg-yellow-500/10 border-yellow-500/30',
-      text: 'text-yellow-400',
-      iconColor: 'text-yellow-400',
-      label: '⚠️ ALREADY SCANNED',
-    },
-    wrong_slot: {
-      icon: Clock,
-      bg: 'bg-orange-500/10 border-orange-500/30',
-      text: 'text-orange-400',
-      iconColor: 'text-orange-400',
-      label: '🕐 WRONG SLOT',
-    },
+    valid: { icon: CheckCircle2, bg: 'bg-green-500/10 border-green-500/30', text: 'text-green-400', iconColor: 'text-green-400', label: '✅ ENTRY APPROVED' },
+    invalid: { icon: XCircle, bg: 'bg-red-500/10 border-red-500/30', text: 'text-red-400', iconColor: 'text-red-400', label: '❌ INVALID QR' },
+    already_used: { icon: XCircle, bg: 'bg-yellow-500/10 border-yellow-500/30', text: 'text-yellow-400', iconColor: 'text-yellow-400', label: '⚠️ ALREADY SCANNED' },
+    wrong_slot: { icon: Clock, bg: 'bg-orange-500/10 border-orange-500/30', text: 'text-orange-400', iconColor: 'text-orange-400', label: '🕐 WRONG SLOT' },
   };
 
   return (
@@ -277,54 +272,80 @@ export default function ScannerPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Scanner Input */}
+        {/* Scanner Panel */}
         <div className="space-y-5">
           <div className="bg-muted/10 border rounded-xl p-6 space-y-4">
+            {/* Mode Toggle */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-muted-foreground text-sm font-medium">
                 <QrCode className="w-4 h-4" />
-                Scan or paste QR code data
+                {cameraEnabled ? 'Camera scanning active' : 'Manual / hardware scanner'}
               </div>
-              <Button 
-                variant={cameraEnabled ? "default" : "outline"}
+              <Button
+                variant={cameraEnabled ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setCameraEnabled(!cameraEnabled)}
+                onClick={() => setCameraEnabled(v => !v)}
+                disabled={cameraLoading}
                 className="gap-2"
               >
-                {cameraEnabled ? <CameraOff className="w-4 h-4" /> : <Camera className="w-4 h-4" />}
-                {cameraEnabled ? "Disable Camera" : "Enable Camera"}
+                {cameraLoading
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : cameraEnabled
+                    ? <CameraOff className="w-4 h-4" />
+                    : <Camera className="w-4 h-4" />
+                }
+                {cameraLoading ? 'Starting…' : cameraEnabled ? 'Stop Camera' : 'Use Camera'}
               </Button>
             </div>
 
+            {/* Camera Viewport */}
             {cameraEnabled && (
-              <div className="overflow-hidden rounded-lg border bg-black/5">
-                <div id="qr-reader" className="w-full"></div>
+              <div className="rounded-xl overflow-hidden border bg-black relative min-h-[280px] flex items-center justify-center">
+                {cameraLoading && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white/70 text-sm z-10 bg-black">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                    <span>Starting camera…</span>
+                  </div>
+                )}
+                <div id="qr-camera-region" className="w-full" />
               </div>
             )}
 
-            <div className="relative">
-              <Input
-                ref={inputRef}
-                value={qrInput}
-                onChange={e => setQrInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Scan QR code or type participant ID…"
-                className="h-12 pr-24 font-mono text-sm"
-                disabled={scanning}
-                autoFocus
-              />
-              <Button
-                className="absolute right-1 top-1 h-10"
-                onClick={() => validateQR(qrInput)}
-                disabled={scanning || !qrInput.trim()}
-              >
-                {scanning ? <RefreshCw className="animate-spin w-4 h-4" /> : <ScanLine className="w-4 h-4" />}
-              </Button>
-            </div>
+            {/* Manual / Hardware Input */}
+            {!cameraEnabled && (
+              <>
+                <div className="relative">
+                  <Input
+                    ref={inputRef}
+                    value={qrInput}
+                    onChange={e => setQrInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Scan QR code or type participant ID…"
+                    className="h-12 pr-24 font-mono text-sm"
+                    disabled={scanning}
+                    autoFocus
+                  />
+                  <Button
+                    className="absolute right-1 top-1 h-10"
+                    onClick={() => validateQR(qrInput)}
+                    disabled={scanning || !qrInput.trim()}
+                  >
+                    {scanning ? <RefreshCw className="animate-spin w-4 h-4" /> : <ScanLine className="w-4 h-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Press <kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">Enter</kbd> after scanning with a hardware QR reader, or click Scan.
+                </p>
+              </>
+            )}
 
-            <p className="text-xs text-muted-foreground">
-              Press <kbd className="bg-muted px-1.5 py-0.5 rounded text-[10px] font-mono">Enter</kbd> after scanning with a hardware QR reader, or click Scan.
-            </p>
+            {/* Camera scanning status */}
+            {cameraEnabled && scanning && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <RefreshCw className="w-4 h-4 animate-spin" />
+                Validating scanned code…
+              </div>
+            )}
           </div>
 
           {/* Result Panel */}
@@ -359,7 +380,7 @@ export default function ScannerPage() {
                   </div>
                 )}
                 <p className={`text-sm ${cfg.text}`}>{scanResult.message}</p>
-                <Button variant="outline" size="sm" onClick={() => { setScanResult(null); inputRef.current?.focus(); }}>
+                <Button variant="outline" size="sm" onClick={() => { setScanResult(null); if (!cameraEnabled) inputRef.current?.focus(); }}>
                   Scan Next
                 </Button>
               </div>
