@@ -48,7 +48,7 @@ export const POST = async (request: Request) => {
     // ── Send per-recipient in batches ───────────────────────────────────────
     const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
     const BATCH_SIZE = 5;
-    const results: any[] = [];
+    const results: PromiseSettledResult<{status: string, email: string}>[] = [];
 
     for (let i = 0; i < to.length; i += BATCH_SIZE) {
       const batchTo = to.slice(i, i + BATCH_SIZE);
