@@ -55,7 +55,7 @@ export interface Participant {
 
 export default function ParticipationSelection() {
 
-  
+
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false); // State to control the Sheet visibility
@@ -92,7 +92,7 @@ export default function ParticipationSelection() {
         id: doc.id,
         selected: doc.data().selected || false, // Ensure "selected" field is fetched and initialized
       })) as Participant[];
-      
+
       setParticipants(participantList);
       sessionStorage.setItem("cached_participants", JSON.stringify(participantList));
     };
@@ -103,55 +103,55 @@ export default function ParticipationSelection() {
     // Separate participants into selected and not selected
     const selectedParticipants = participants.filter((p) => p.selected);
     const notSelectedParticipants = participants.filter((p) => !p.selected);
-  
+
     console.log("Selected participants:", selectedParticipants);
     console.log("Not selected participants:", notSelectedParticipants);
-  
+
     // Get email addresses and usernames for both groups
     const selectedEmailAddresses = selectedParticipants.map((p) => p.email);
     const selectedUsernames = selectedParticipants.map((p) => p.name);
     const notSelectedEmailAddresses = notSelectedParticipants.map((p) => p.email);
     const notSelectedUsernames = notSelectedParticipants.map((p) => p.name);
-  
+
     // Prepare email data for selected participants
     const selectedEmailDetails = {
       to: selectedEmailAddresses,
       usernames: selectedUsernames,
       participantIds: selectedParticipants.map(p => p.id), // Using the document ID from Firestore
     };
-  
+
     // Prepare email data for not selected participants
     const notSelectedEmailDetails = {
       to: notSelectedEmailAddresses,
       usernames: notSelectedUsernames,
       participantIds: notSelectedParticipants.map(p => p.id), // Using the document ID from Firestore
     };
-  
+
     console.log("Selected email details:", selectedEmailDetails);
     console.log("Not selected email details:", notSelectedEmailDetails);
-  
+
     try {
       // Check if no participants are selected and show a message
       if (selectedParticipants.length === 0 && type === 'selected') {
         toast.error("No participants are selected.");
         return; // Exit early if no participants are selected
       }
-  
+
       // Conditionally send emails based on the type argument
       if (type === 'selected') {
         // Send emails to selected participants
         const selectedResponse = await fetch('/api/sendselectedEmail', {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${sessionStorage.getItem('Token')}`, // Include token if required
           },
           body: JSON.stringify(selectedEmailDetails),
         });
-  
+
         const selectedResponseText = await selectedResponse.text(); // Debugging raw response
         console.log("Selected Response:", selectedResponseText);
-  
+
         if (selectedResponse.ok) {
           toast.success(`Emails sent to ${selectedEmailAddresses.length} selected participants!`);
         } else {
@@ -162,16 +162,16 @@ export default function ParticipationSelection() {
         // Send emails to not selected participants
         const notSelectedResponse = await fetch('/api/sendnotselectedEmail', {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${sessionStorage.getItem('Token')}`, // Include token if required
           },
           body: JSON.stringify(notSelectedEmailDetails),
         });
-  
+
         const notSelectedResponseText = await notSelectedResponse.text(); // Debugging raw response
         console.log("Not Selected Response:", notSelectedResponseText);
-  
+
         if (notSelectedResponse.ok) {
           toast.success(`Emails sent to ${notSelectedEmailAddresses.length} not selected participants!`);
         } else {
@@ -187,61 +187,61 @@ export default function ParticipationSelection() {
       toast.error('Something went wrong while sending emails.');
     }
   };
-  
-  
-  
-  
+
+
+
+
   const handleDownloadExcelClick = () => {
     setIsSheetOpen(true);
     // Assuming the response gives the correct Cloudinary URL
-  
-// Open the sheet when "Download Excel" is clicked
+
+    // Open the sheet when "Download Excel" is clicked
   };
 
-const handledownload = async () => {
-  try {
-    const response = await fetch('/api/generateExcel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+  const handledownload = async () => {
+    try {
+      const response = await fetch('/api/generateExcel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
 
-      body: JSON.stringify(participants), // Send participants data
-    });
+        body: JSON.stringify(participants), // Send participants data
+      });
 
-    const result = await response.json();
-    if (result.success) {
-      const cloudinaryUrl = result.url;
+      const result = await response.json();
+      if (result.success) {
+        const cloudinaryUrl = result.url;
 
 
-    // Create an anchor element
-    const link = document.createElement("a");
-    link.href = cloudinaryUrl;
-    link.download = "participants.xlsx"; // Suggested filename
+        // Create an anchor element
+        const link = document.createElement("a");
+        link.href = cloudinaryUrl;
+        link.download = "participants.xlsx"; // Suggested filename
 
-    // Append to body, trigger click, and remove it
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-      toast.success('Excel file downloaded successfully!');
-    } else {
-      toast.error('Failed to generate Excel file.');
+        // Append to body, trigger click, and remove it
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast.success('Excel file downloaded successfully!');
+      } else {
+        toast.error('Failed to generate Excel file.');
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      toast.error('Something went wrong.');
     }
-  } catch (error) {
-    console.error('Error:', error);
-    toast.error('Something went wrong.');
-  }
-  setIsSheetOpen(false); // Close the sheet
-};
+    setIsSheetOpen(false); // Close the sheet
+  };
 
   const handleSelectionChange = (updatedParticipants: Participant[]) => {
     // Update the participant in the state (or Firebase)
     setParticipants(prevParticipants => {
       const newParticipants = [...prevParticipants];
       updatedParticipants.forEach(up => {
-         const index = newParticipants.findIndex(p => p.id === up.id);
-         if (index !== -1) {
-             newParticipants[index] = up;
-         }
+        const index = newParticipants.findIndex(p => p.id === up.id);
+        if (index !== -1) {
+          newParticipants[index] = up;
+        }
       });
       sessionStorage.setItem("cached_participants", JSON.stringify(newParticipants));
       return newParticipants;
@@ -249,7 +249,7 @@ const handledownload = async () => {
   };
 
 
-  
+
 
   return (
     <>
@@ -277,41 +277,41 @@ const handledownload = async () => {
               </DropdownMenuContent>
             </DropdownMenu>
 
-{/* Send Email Button */}
-<AlertDialog>
-  <AlertDialogTrigger asChild>
-    <Button>Send Email</Button>
-  </AlertDialogTrigger>
-  <AlertDialogContent>
-    <AlertDialogHeader>
-      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-      <AlertDialogDescription>
-        This action cannot be undone. This will send emails to all selected participants. Please review before proceeding.
-      </AlertDialogDescription>
-    </AlertDialogHeader>
-    <AlertDialogFooter>
-      <AlertDialogCancel>Cancel</AlertDialogCancel>
-      <AlertDialogAction onClick={() => handleSendEmail('selected')}>Continue</AlertDialogAction> {/* Passing 'selected' to send emails to selected participants */}
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
+            {/* Send Email Button */}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button>Send Email</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will send emails to all selected participants. Please review before proceeding.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => handleSendEmail('selected')}>Continue</AlertDialogAction> {/* Passing 'selected' to send emails to selected participants */}
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
-{/* Alert Dialog for sending emails to rejected participants */}
-<AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-  <AlertDialogTrigger asChild />
-  <AlertDialogContent>
-    <AlertDialogHeader>
-      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-      <AlertDialogDescription>
-        This action cannot be undone. This will send emails to all rejected participants (those without the checkbox marked).
-      </AlertDialogDescription>
-    </AlertDialogHeader>
-    <AlertDialogFooter>
-      <AlertDialogCancel onClick={() => setIsAlertOpen(false)}>Cancel</AlertDialogCancel>
-      <AlertDialogAction onClick={() => handleSendEmail('notselected')}>Continue</AlertDialogAction> {/* Passing 'notselected' to send emails to rejected participants */}
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
+            {/* Alert Dialog for sending emails to rejected participants */}
+            <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
+              <AlertDialogTrigger asChild />
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will send emails to all rejected participants (those without the checkbox marked).
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => setIsAlertOpen(false)}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => handleSendEmail('notselected')}>Continue</AlertDialogAction> {/* Passing 'notselected' to send emails to rejected participants */}
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             {/* Sheet for Download Excel */}
             <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
@@ -322,7 +322,7 @@ const handledownload = async () => {
                     Hey {user?.name ? user.name : 'there'} 🙋‍♂️
                   </SheetTitle>
                   <SheetDescription className="text-sm text-muted-foreground">
-                    Download the data of student participants registered for TEDxSIST Feb 2025.<br/>
+                    Download the data of student participants registered for TEDxSIST Feb 2025.<br />
                   </SheetDescription>
                 </SheetHeader>
                 <Button onClick={handledownload} className="mt-4">Download Excel</Button>
@@ -335,9 +335,9 @@ const handledownload = async () => {
         </div>
       </section>
 
-      
 
-      
+
+
 
       {/* Section for mobile screens */}
       <section className="lg:hidden text-foreground">

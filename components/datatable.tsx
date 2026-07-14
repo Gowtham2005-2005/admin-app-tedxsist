@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { doc, increment, onSnapshot, writeBatch } from "firebase/firestore";
-import { db } from "@/firebase";
 import {
   ColumnDef,
   SortingState,
@@ -58,30 +56,7 @@ export type Participant = {
   selected: boolean;
 };
 
-const updateParticipantSelections = async (participants: Participant[]) => {
-  try {
-    const batch = writeBatch(db);
-    const selectedCounterRef = doc(db, "selected", "selected");
-    
-    let delta = 0;
 
-    for (const participant of participants) {
-      const participantRef = doc(db, "participants", participant.id);
-      batch.update(participantRef, {
-        selected: participant.selected,
-      });
-      delta += participant.selected ? 1 : -1;
-    }
-
-    if (delta !== 0) {
-      batch.set(selectedCounterRef, { count: increment(delta) }, { merge: true });
-    }
-
-    await batch.commit();
-  } catch (error) {
-    console.error("Error updating participant selections: ", error);
-  }
-};
 
 type DataTableDemoProps = {
   participants: Participant[];
@@ -97,20 +72,29 @@ export const DataTableDemo = ({ participants: initialParticipants, onSelectionCh
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [selectedCount, setSelectedCount] = useState(0);
 
+  // Derive initial selected count from participants prop
   useEffect(() => {
-    // Set up real-time listener for the selected count
-    const selectedCounterRef = doc(db, "selected", "selected");
-    const unsubscribe = onSnapshot(selectedCounterRef, (doc) => {
-      if (doc.exists()) {
-        setSelectedCount(doc.data().count || 0);
-      } else {
-        setSelectedCount(0);
-      }
-    });
+    setSelectedCount(initialParticipants.filter(p => p.selected).length);
+  }, [initialParticipants]);
 
-    // Cleanup subscription on unmount
-    return () => unsubscribe();
-  }, []);
+  const updateParticipantSelections = async (updatedParticipants: Participant[]) => {
+    try {
+      const response = await fetch('/api/updateSelection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participants: updatedParticipants })
+      });
+      if (!response.ok) {
+        throw new Error('Failed to update selection');
+      }
+      
+      // Update local counter
+      const delta = updatedParticipants.filter(p => p.selected).length - updatedParticipants.filter(p => !p.selected).length;
+      setSelectedCount(prev => prev + delta);
+    } catch (error) {
+      console.error("Error updating participant selections: ", error);
+    }
+  };
 
   const handleCheckboxChange = (participant: Participant, newValue: boolean) => {
   setBulkParticipants([{ ...participant, selected: newValue }]);
