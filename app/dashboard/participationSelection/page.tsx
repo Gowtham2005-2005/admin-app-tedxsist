@@ -51,6 +51,9 @@ export interface Participant {
   goalsResponse: string;
   email: string;
   selected: boolean;
+  emailsent?: boolean;
+  email_failed?: boolean;
+  email_error?: string;
 }
 
 export default function ParticipationSelection() {
@@ -58,6 +61,8 @@ export default function ParticipationSelection() {
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [isAlertOpen, setIsAlertOpen] = useState(false);
+  const [isLogsSheetOpen, setIsLogsSheetOpen] = useState(false);
+  const [isRefreshingLogs, setIsRefreshingLogs] = useState(false);
   const [isSheetOpen, setIsSheetOpen] = useState(false); // State to control the Sheet visibility
   const router = useRouter();
   const [user, setUser] = useState<UserPayload | null>(null);
@@ -77,25 +82,28 @@ export default function ParticipationSelection() {
     }
   }, [router]);
 
-  useEffect(() => {
-    const fetchParticipants = async () => {
+  const fetchParticipants = async (forceRefresh = false) => {
+    if (!forceRefresh) {
       const cachedData = sessionStorage.getItem("cached_participants");
       if (cachedData) {
         setParticipants(JSON.parse(cachedData));
         return;
       }
+    }
 
-      const participantsCollection = collection(db, "participants");
-      const participantSnapshot = await getDocs(participantsCollection);
-      const participantList = participantSnapshot.docs.map((doc) => ({
-        ...doc.data(),
-        id: doc.id,
-        selected: doc.data().selected || false, // Ensure "selected" field is fetched and initialized
-      })) as Participant[];
+    const participantsCollection = collection(db, "participants");
+    const participantSnapshot = await getDocs(participantsCollection);
+    const participantList = participantSnapshot.docs.map((doc) => ({
+      ...doc.data(),
+      id: doc.id,
+      selected: doc.data().selected || false, // Ensure "selected" field is fetched and initialized
+    })) as Participant[];
 
-      setParticipants(participantList);
-      sessionStorage.setItem("cached_participants", JSON.stringify(participantList));
-    };
+    setParticipants(participantList);
+    sessionStorage.setItem("cached_participants", JSON.stringify(participantList));
+  };
+
+  useEffect(() => {
     fetchParticipants();
   }, []);
 
@@ -274,6 +282,15 @@ export default function ParticipationSelection() {
 
 
 
+  const handleRefreshLogs = async () => {
+    setIsRefreshingLogs(true);
+    await fetchParticipants(true);
+    setIsRefreshingLogs(false);
+  };
+
+  const sentParticipantsCount = participants.filter(p => p.emailsent).length;
+  const failedParticipants = participants.filter(p => p.email_failed);
+
   return (
     <>
       {/* Section for larger screens */}
@@ -299,6 +316,50 @@ export default function ParticipationSelection() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Sheet open={isLogsSheetOpen} onOpenChange={setIsLogsSheetOpen}>
+              <SheetTrigger asChild>
+                <Button variant="secondary">Delivery Logs</Button>
+              </SheetTrigger>
+              <SheetContent className="overflow-y-auto">
+                <SheetHeader>
+                  <SheetTitle>Email Delivery Logs</SheetTitle>
+                  <SheetDescription>
+                    Live view of email sending status.
+                  </SheetDescription>
+                </SheetHeader>
+                <div className="py-4 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Successfully Sent</p>
+                      <p className="text-2xl font-bold text-green-500">{sentParticipantsCount}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Failed</p>
+                      <p className="text-2xl font-bold text-red-500">{failedParticipants.length}</p>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={handleRefreshLogs} disabled={isRefreshingLogs}>
+                    {isRefreshingLogs ? 'Refreshing...' : 'Refresh Logs'}
+                  </Button>
+
+                  {failedParticipants.length > 0 && (
+                    <div className="mt-6">
+                      <h3 className="font-medium text-destructive mb-2">Failed Deliveries</h3>
+                      <div className="space-y-3">
+                        {failedParticipants.map(p => (
+                          <div key={p.id} className="p-3 border rounded-md bg-destructive/10">
+                            <p className="font-semibold text-sm">{p.name}</p>
+                            <p className="text-xs text-muted-foreground">{p.email}</p>
+                            <p className="text-xs text-destructive mt-1 font-mono">Error: {p.email_error || "Unknown"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
 
             {/* Send Email Button */}
             <AlertDialog>

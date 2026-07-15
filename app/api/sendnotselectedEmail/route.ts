@@ -88,9 +88,19 @@ export const POST = async (request: Request) => {
           });
 
           return { status: 'sent', email };
-        } catch (error) {
+        } catch (error: Error | unknown) {
           console.error(`Error sending rejection email to ${email}:`, error);
-          throw error;
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          
+          const participantRef = adminDb.collection('participants').doc(participantId);
+          await participantRef.update({
+            email_failed: true,
+            emailsent: false,
+            email_error: errorMessage,
+            email_sent_at: new Date().toISOString(),
+          });
+          
+          return { status: 'failed', email, error: errorMessage };
         }
       });
 
