@@ -119,6 +119,7 @@ export const POST = async (request: Request) => {
 
           // Log to Firestore
           await participantRef.update({
+            selected: true,
             selection_email_sent: true,
             emailsent: true,
             assigned_slot: slotLabel,

@@ -140,23 +140,13 @@ export default function ScannerPage() {
       }
 
       // Check late arrival — use slotsRef to always get latest
+      let isLate = false;
       if (qrSlot) {
         const assignedSlotConfig = slotsRef.current.find(s => s.label === qrSlot);
         if (assignedSlotConfig) {
           const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
           if (hhmm > assignedSlotConfig.endTime) {
-            setScanResult({
-              status: 'wrong_slot',
-              participantId,
-              name: data.name,
-              email: data.email,
-              regno: data.regno,
-              slot: qrSlot,
-              currentTime: timeStr,
-              message: `Late arrival! Assigned to ${qrSlot}. Entry denied after ${assignedSlotConfig.endTime}.`,
-            });
-            setScanHistory(prev => [{ id: participantId, name: data.name, slot: qrSlot, time: timeStr, valid: false }, ...prev.slice(0, 19)]);
-            return;
+            isLate = true;
           }
         }
       }
@@ -180,7 +170,7 @@ export default function ScannerPage() {
         regno: data.regno,
         slot: qrSlot ?? data.assigned_slot ?? 'N/A',
         currentTime: timeStr,
-        message: 'Entry approved! Welcome to TEDxSIST.',
+        message: isLate ? `Late arrival accepted! Assigned to ${qrSlot}.` : 'Entry approved! Welcome to TEDxSIST.',
       };
       setScanResult(result);
       setScanHistory(prev => [{ id: participantId, name: data.name, slot: result.slot!, time: timeStr, valid: true }, ...prev.slice(0, 19)]);
