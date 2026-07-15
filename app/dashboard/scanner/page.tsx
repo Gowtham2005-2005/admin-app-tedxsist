@@ -2,8 +2,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
-import { db } from '@/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { CheckCircle2, XCircle, ScanLine, Clock, User, RefreshCw, QrCode, Camera, CameraOff, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -109,19 +107,22 @@ export default function ScannerPage() {
       const participantId = parts[0];
       const qrSlot = parts.slice(1).join('|') || null; // handles "09:00 – 09:15" style labels
 
-      const participantRef = doc(db, 'participants', participantId);
-      const snap = await getDoc(participantRef);
-
+      const res = await fetch(`/api/scanner/getParticipant?id=${encodeURIComponent(participantId)}`);
+      
       const now = new Date();
       const timeStr = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 
-      if (!snap.exists()) {
-        setScanResult({ status: 'invalid', message: 'Participant not found. QR code may be invalid.', currentTime: timeStr });
-        setScanHistory(prev => [{ id: trimmed, name: 'Unknown', slot: 'N/A', time: timeStr, valid: false }, ...prev.slice(0, 19)]);
-        return;
+      if (!res.ok) {
+        if (res.status === 404) {
+          setScanResult({ status: 'invalid', message: 'Participant not found. QR code may be invalid.', currentTime: timeStr });
+          setScanHistory(prev => [{ id: trimmed, name: 'Unknown', slot: 'N/A', time: timeStr, valid: false }, ...prev.slice(0, 19)]);
+          return;
+        }
+        throw new Error('Failed to fetch participant data');
       }
 
-      const data = snap.data();
+      const resData = await res.json();
+      const data = resData.data;
 
       if (data.entry_scanned) {
         setScanResult({
@@ -161,7 +162,15 @@ export default function ScannerPage() {
       }
 
       // ✅ Valid — mark entry
-      await updateDoc(participantRef, { entry_scanned: true, scanned_at: now.toISOString() });
+      const updateRes = await fetch(`/api/scanner/markEntry`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId, scannedAt: now.toISOString() })
+      });
+
+      if (!updateRes.ok) {
+        throw new Error('Failed to update participant entry');
+      }
 
       const result: ScanResult = {
         status: 'valid',

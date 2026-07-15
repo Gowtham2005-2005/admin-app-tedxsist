@@ -9,21 +9,34 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Query the collection to find the document where 'id' matches qrResult
-    const participantQuery = await adminDb.collection('participants').where('id', '==', qrResult).get();
+    const qrParts = qrResult.split('|');
+    const participantId = qrParts[0];
 
-    if (participantQuery.empty) {
-      return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
+    let participantDoc;
+    let data;
+
+    // First try querying by document ID (which is the email for new users)
+    const docRef = adminDb.collection('participants').doc(participantId);
+    const docSnap = await docRef.get();
+
+    if (docSnap.exists) {
+      participantDoc = docSnap;
+      data = docSnap.data();
+    } else {
+      // Fallback to query by inner 'id' field (UUID for old users)
+      const participantQuery = await adminDb.collection('participants').where('id', '==', participantId).get();
+      if (!participantQuery.empty) {
+        participantDoc = participantQuery.docs[0];
+        data = participantDoc.data();
+      } else {
+        return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
+      }
     }
-
-    // Get the first matching document
-    const participantDoc = participantQuery.docs[0];
-    const data = participantDoc.data();
 
     // Return participant data
     return NextResponse.json({
       ...data,
-      id: data?.id || qrResult, // Use data.id if exists, fallback to qrResult
+      id: participantDoc.id, // Use the doc ID
     });
   } catch (error) {
     console.error('Error fetching participant data:', error);
@@ -40,17 +53,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Query the collection to find the document where 'id' matches qrResult
-    const participantQuery = await adminDb.collection('participants').where('id', '==', qrResult).get();
+    const qrParts = qrResult.split('|');
+    const participantId = qrParts[0];
 
-    if (participantQuery.empty) {
-      return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
+    let participantDoc;
+    let participantRef;
+    let data;
+
+    // First try querying by document ID (which is the email for new users)
+    const docRef = adminDb.collection('participants').doc(participantId);
+    const docSnap = await docRef.get();
+
+    if (docSnap.exists) {
+      participantDoc = docSnap;
+      participantRef = docRef;
+      data = docSnap.data();
+    } else {
+      // Fallback to query by inner 'id' field (UUID for old users)
+      const participantQuery = await adminDb.collection('participants').where('id', '==', participantId).get();
+      if (!participantQuery.empty) {
+        participantDoc = participantQuery.docs[0];
+        participantRef = participantDoc.ref;
+        data = participantDoc.data();
+      } else {
+        return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
+      }
     }
-
-    // Get the first matching document
-    const participantDoc = participantQuery.docs[0];
-    const participantRef = participantDoc.ref;
-    const data = participantDoc.data();
 
     // Update attendance using admin SDK
     await participantRef.update({
@@ -62,7 +90,7 @@ export async function POST(request: NextRequest) {
     // Return updated participant data
     return NextResponse.json({
       ...data,
-      id: data?.id || qrResult, // Use data.id if exists, fallback to qrResult
+      id: participantDoc.id, // Use the doc ID
       attend: true,
       timestamp: qrResultTimestamp,
       markedBy: userName,
