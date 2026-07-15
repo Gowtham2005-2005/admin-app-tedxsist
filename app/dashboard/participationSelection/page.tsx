@@ -137,47 +137,70 @@ export default function ParticipationSelection() {
         return; // Exit early if no participants are selected
       }
 
+      const CHUNK_SIZE = 10;
+
       // Conditionally send emails based on the type argument
       if (type === 'selected') {
-        // Send emails to selected participants
-        const selectedResponse = await fetch('/api/sendselectedEmail', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${sessionStorage.getItem('Token')}`, // Include token if required
-          },
-          body: JSON.stringify(selectedEmailDetails),
-        });
+        let sentCount = 0;
+        const totalChunks = Math.ceil(selectedEmailAddresses.length / CHUNK_SIZE);
+        
+        for (let i = 0; i < selectedEmailAddresses.length; i += CHUNK_SIZE) {
+          const chunkDetails = {
+            to: selectedEmailAddresses.slice(i, i + CHUNK_SIZE),
+            usernames: selectedUsernames.slice(i, i + CHUNK_SIZE),
+            participantIds: selectedEmailDetails.participantIds.slice(i, i + CHUNK_SIZE),
+          };
+          
+          toast(`Sending chunk ${Math.floor(i / CHUNK_SIZE) + 1} of ${totalChunks}...`);
+          
+          const selectedResponse = await fetch('/api/sendselectedEmail', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${sessionStorage.getItem('Token')}`, // Include token if required
+            },
+            body: JSON.stringify(chunkDetails),
+          });
 
-        const selectedResponseText = await selectedResponse.text(); // Debugging raw response
-        console.log("Selected Response:", selectedResponseText);
-
-        if (selectedResponse.ok) {
-          toast.success(`Emails sent to ${selectedEmailAddresses.length} selected participants!`);
-        } else {
-          const errorResponse = JSON.parse(selectedResponseText);
-          toast.error(`Failed to send emails to selected participants: ${errorResponse.message || "Unknown error"}`);
+          if (!selectedResponse.ok) {
+            const errorResponse = await selectedResponse.json();
+            throw new Error(`Failed to send chunk: ${errorResponse.message || "Unknown error"}`);
+          }
+          sentCount += chunkDetails.to.length;
         }
+        
+        toast.success(`Emails successfully sent to all ${sentCount} selected participants!`);
+        
       } else if (type === 'notselected') {
-        // Send emails to not selected participants
-        const notSelectedResponse = await fetch('/api/sendnotselectedEmail', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${sessionStorage.getItem('Token')}`, // Include token if required
-          },
-          body: JSON.stringify(notSelectedEmailDetails),
-        });
+        let sentCount = 0;
+        const totalChunks = Math.ceil(notSelectedEmailAddresses.length / CHUNK_SIZE);
+        
+        for (let i = 0; i < notSelectedEmailAddresses.length; i += CHUNK_SIZE) {
+          const chunkDetails = {
+            to: notSelectedEmailAddresses.slice(i, i + CHUNK_SIZE),
+            usernames: notSelectedUsernames.slice(i, i + CHUNK_SIZE),
+            participantIds: notSelectedEmailDetails.participantIds.slice(i, i + CHUNK_SIZE),
+          };
+          
+          toast(`Sending chunk ${Math.floor(i / CHUNK_SIZE) + 1} of ${totalChunks}...`);
+          
+          const notSelectedResponse = await fetch('/api/sendnotselectedEmail', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${sessionStorage.getItem('Token')}`, // Include token if required
+            },
+            body: JSON.stringify(chunkDetails),
+          });
 
-        const notSelectedResponseText = await notSelectedResponse.text(); // Debugging raw response
-        console.log("Not Selected Response:", notSelectedResponseText);
-
-        if (notSelectedResponse.ok) {
-          toast.success(`Emails sent to ${notSelectedEmailAddresses.length} not selected participants!`);
-        } else {
-          const errorResponse = JSON.parse(notSelectedResponseText);
-          toast.error(`Failed to send emails to not selected participants: ${errorResponse.message || "Unknown error"}`);
+          if (!notSelectedResponse.ok) {
+            const errorResponse = await notSelectedResponse.json();
+            throw new Error(`Failed to send chunk: ${errorResponse.message || "Unknown error"}`);
+          }
+          sentCount += chunkDetails.to.length;
         }
+        
+        toast.success(`Emails successfully sent to all ${sentCount} not selected participants!`);
       } else {
         // If 'type' is not recognized, you can either handle both or give a warning
         toast.error("Invalid type specified. Please use 'selected' or 'notselected'.");
