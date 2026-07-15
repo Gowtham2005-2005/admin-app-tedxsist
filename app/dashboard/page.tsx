@@ -32,14 +32,16 @@ export default function Page() {
         
         // Use getCountFromServer to avoid reading all documents
         const totalSnap = await getCountFromServer(participantsCol);
+        
         const selectedQuery = query(participantsCol, where("selected", "==", true));
         const selectedSnap = await getCountFromServer(selectedQuery);
         
-        // For rejected, either they have selected == false or the field is missing.
-        // Assuming rejected is simply total - selected for ease.
+        const rejectedQuery = query(participantsCol, where("rejection_email_sent", "==", true));
+        const rejectedSnap = await getCountFromServer(rejectedQuery);
+        
         const total = totalSnap.data().count;
         const selected = selectedSnap.data().count;
-        const rejected = total - selected;
+        const rejected = rejectedSnap.data().count;
         
         setCounts({ total, selected, rejected });
       } catch (error) {
