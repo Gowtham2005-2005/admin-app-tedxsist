@@ -145,7 +145,7 @@ export default function ParticipationSelection() {
         return; // Exit early if no participants are selected
       }
 
-      const CHUNK_SIZE = 10;
+      const CHUNK_SIZE = 5;
 
       // Conditionally send emails based on the type argument
       if (type === 'selected') {

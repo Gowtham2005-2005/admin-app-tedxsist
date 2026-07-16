@@ -46,7 +46,7 @@ export const POST = async (request: Request) => {
 
     // ── Send per-recipient in batches ───────────────────────────────────────
     const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
-    const BATCH_SIZE = 5;
+    const BATCH_SIZE = 2;
     const results: PromiseSettledResult<{status: string, email: string}>[] = [];
 
     for (let i = 0; i < to.length; i += BATCH_SIZE) {
@@ -61,12 +61,13 @@ export const POST = async (request: Request) => {
         const participantId = batchParticipantIds[index];
 
         try {
-          // Skip if already sent
+          // Skip if already sent rejection or acceptance email
           const participantRef = adminDb.collection('participants').doc(participantId);
           const participantSnap = await participantRef.get();
+          const participantData = participantSnap.data();
 
-          if (participantSnap.exists && participantSnap.data()?.rejection_email_sent) {
-            console.log(`Rejection email already sent to ${email}, skipping.`);
+          if (participantSnap.exists && (participantData?.rejection_email_sent || participantData?.selection_email_sent)) {
+            console.log(`Email already sent to ${email}, skipping.`);
             return { status: 'skipped', email };
           }
 
@@ -107,9 +108,9 @@ export const POST = async (request: Request) => {
       const batchResults = await Promise.allSettled(batchPromises);
       results.push(...batchResults);
 
-      // Add a 4-second delay between batches to respect Gmail SMTP rate limits
+      // Add a 1-second delay between batches to respect Gmail SMTP rate limits
       if (i + BATCH_SIZE < to.length) {
-        await delay(4000);
+        await delay(1000);
       }
     }
 
