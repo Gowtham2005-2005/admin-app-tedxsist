@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Users, UserX, Loader2 } from "lucide-react";
+import { Users, Loader2 } from "lucide-react";
 
 interface UserPayload extends JwtPayload {
   name: string;
@@ -73,7 +73,6 @@ export default function AttendancePage() {
 
   // Filter those who attended (checking attend or entry_scanned based on markEntry route)
   const attendees = participants.filter((p) => p.attend || p.entry_scanned);
-  const notAttendedCount = participants.length - attendees.length;
 
   return (
     <div className="space-y-6">
@@ -104,20 +103,6 @@ export default function AttendancePage() {
                 <div className="text-2xl font-bold">{attendees.length}</div>
                 <p className="text-xs text-muted-foreground">
                   Participants checked in
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Not Attended
-                </CardTitle>
-                <UserX className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{notAttendedCount}</div>
-                <p className="text-xs text-muted-foreground">
-                  Participants yet to check in
                 </p>
               </CardContent>
             </Card>
