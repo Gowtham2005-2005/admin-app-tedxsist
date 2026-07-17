@@ -43,6 +43,23 @@ export default function ScannerPage() {
   const [slots, setSlots] = useState<SlotConfig[]>([]);
   const [currentSlot, setCurrentSlot] = useState<string | null>(null);
   const [scanHistory, setScanHistory] = useState<{ id: string; name: string; slot: string; time: string; valid: boolean }[]>([]);
+  
+  // Load session memory
+  useEffect(() => {
+    const saved = sessionStorage.getItem('scanner_session_memory');
+    if (saved) {
+      try {
+        setScanHistory(JSON.parse(saved));
+      } catch(e) {}
+    }
+  }, []);
+
+  // Save session memory
+  useEffect(() => {
+    if (scanHistory.length > 0) {
+      sessionStorage.setItem('scanner_session_memory', JSON.stringify(scanHistory));
+    }
+  }, [scanHistory]);
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const [cameraLoading, setCameraLoading] = useState(false);
 

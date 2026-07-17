@@ -8,6 +8,7 @@ import {
   Users,
   ScanLine,
   Settings2,
+  CheckSquare,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -91,6 +92,11 @@ const data = {
       title: "Entry Scanner",
       url: "/dashboard/scanner",
       icon: ScanLine,
+    },
+    {
+      title: "Attendance",
+      url: "/dashboard/attendance",
+      icon: CheckSquare,
     },
   ]
   
