@@ -50,7 +50,7 @@ export default function ScannerPage() {
     if (saved) {
       try {
         setScanHistory(JSON.parse(saved));
-      } catch(e) {}
+      } catch {}
     }
   }, []);
 
